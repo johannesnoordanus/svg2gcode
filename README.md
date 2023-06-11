@@ -1,7 +1,7 @@
 # svg2gcode
 
 A commandline steering program that enables laser cutting of svg drawings```<svg:path ..>tags``` and combined engraving of svg images```<svg:image ..>tags```.
-It is based on library SvgToGcode (*fork*: https://github.com/johannesnoordanus/SvgToGcode) which should be installed.
+It is based on library SvgToGcode (*fork*: https://github.com/johannesnoordanus/SvgToGcode) which should be installed <sup>(*)</sup>.
 
 Drawings and images can be composed using Inkscape (for example) and saved to a .svg file. This file can be converted to gcode by svg2gcode.
 Gcode produced in this way has the advantage that drawings and images have the same - relative - position and orientation as can be seen on the composer window.
@@ -16,19 +16,17 @@ Image attributes ```gcode_pixelsize```, ```gcode_maxpower``` and ```gcode_speed`
 
 
 ### Install:
-Unpack SvgToGcode (*fork*, see link above) to a directory within ```$PATH``` (or within python path) and 'install' svg2gcode.py to the same directory.</br>
-Then:
-
 ```
-> cd <same directory>
-> chmod u+x svg2gcode.py  # to make it executable; thats it!
+> 
+> pip install svg2gcode
 ```
+<sup>(*)</sup> Note that library *svg_to_gcode* is included in this package. 
 ### Usage:
 See notes below.
 ```
-$ svg2gcode.py --help
+$ svg2gcode --help
 usage: svg2gcode.py [-h] [--showimage] [--pixelsize <default:0.1>] [--imagespeed <default:800>] [--cuttingspeed <default:1000>] [--imagepower <default:300>]
-                    [--cuttingpower <default:0.85>] [--maxlaserpower <default:1000>] [--xmaxtravel <default:300>] [--ymaxtravel <default:400>] [--fan] [-V]
+                    [--cuttingpower <default:0.85>] [--maxlaserpower <default:1000>] [--rapidmove] [--xmaxtravel <default:300>] [--ymaxtravel <default:400>] [--fan] [-V]
                     svg gcode
 
 Convert svg to gcode for GRBL v1.1 compatible diode laser engravers.
@@ -52,6 +50,7 @@ options:
                         percentage of maximum laser power for line drawings/cutting
   --maxlaserpower <default:1000>
                         maximum laser power of laser cutter
+  --rapidmove           generate inbetween G0 moves
   --xmaxtravel <default:300>
                         machine x-axis lengh in mm
   --ymaxtravel <default:400>
@@ -60,10 +59,9 @@ options:
   -V, --version         show version number and exit
 ```
 ### Notes:
- - library SvgToGcode ```svg_to_gcode``` and ```svg2gcode.py``` must be 'installed' within the same directory (and possibly in ```$PATH```)
- - example command to create two types of gcode file, one containing the drawings of the .svg, the other containing the images:      
+  - example command to create two types of gcode file, one containing the drawings of the .svg, the other containing the images:      
 ```
-  > svg2gcode.py ambachtmanlogo.svg logo.gc
+  > svg2gcode ambachtmanlogo.svg logo.gc
   > ..
   > ls *.gc 
   > logo.gc             # all drawings
@@ -71,3 +69,7 @@ options:
 ```   
  - drawing objects - within the composer - must be converted to a```path```to be translated to a gcode sequence
  - also, image objects should **not** be converted a ```path```
+
+
+
+
