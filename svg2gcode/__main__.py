@@ -62,7 +62,7 @@ def main() -> int:
     parser.add_argument('--imagepower', default=imagepower_default, metavar="<default:" +str(imagepower_default)+ ">",
         type=int, help="maximum laser power while drawing an image (as a rule of thumb set to 1/3 of the machine maximum)")
     parser.add_argument('--cuttingpower', default=cuttingpower_default, metavar="<default:" +str(cuttingpower_default)+ ">",
-        type=int, help="percentage of maximum laser power for line drawings/cutting")
+        type=float, help="percentage of maximum laser power for line drawings/cutting")
     parser.add_argument('--maxlaserpower', default=maxlaserpower_default, metavar="<default:" +str(maxlaserpower_default)+ ">",
         type=int, help="maximum laser power of laser cutter")
     parser.add_argument('--rapidmove', action='store_true', default=True, help='generate inbetween G0 moves' )
