@@ -68,4 +68,6 @@ options:
   > logo_images.gc      # all images
 ```   
  - drawing objects - within the composer - must be converted to a```path```to be translated to a gcode sequence
- - also, image objects should **not** be converted a ```path```
+ - also, image objects should **not** be converted to a ```path```
+ - images must be included within the .svg file (not linked) and be base64 encoded.
+ - images can be in several formats (my tests included ```.png```and ```.jpg```image files)
