@@ -1,0 +1,25 @@
+[build-system]
+requires = ["flit_core >=3.2,<4"]
+build-backend = "flit_core.buildapi"
+
+[project]
+name = "svg2gcode"
+authors = [{name = "Johannes Noordanus", email = "mailjohannes.mailnoordanus@gmail.com"}]
+readme = "README.md"
+license = {file = "LICENSE"}
+classifiers = ["License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)"]
+dynamic = ["version", "description"]
+
+keywords = ["scalable vector graphics", "svg", "image", "laser cutter", "laser engraving"]
+dependencies = [
+    "numpy >= 1.24.3",
+    "Pillow >= 9.5.0",
+]
+requires-python = ">=3.10.6"
+
+[project.scripts]
+svg2gcode = "svg2gcode.__main__:main"
+
+[project.urls]
+Home = "https://github.com/johannesnoordanus/svg2gcode"
+
