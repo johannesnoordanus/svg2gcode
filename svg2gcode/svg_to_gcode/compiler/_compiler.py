@@ -1,3 +1,4 @@
+import os
 import warnings
 import math
 import copy
@@ -15,6 +16,8 @@ from svg2gcode.svg_to_gcode import DEFAULT_SETTING
 from svg2gcode.svg_to_gcode import TOLERANCES, SETTING, check_setting
 
 from svg2gcode import __version__
+
+FILENAME_LENGTH_LIMIT = 255
 
 from PIL import Image
 
@@ -199,19 +202,26 @@ class Compiler:
         self.body.extend(code)
 
     def decode_base64(self, base64_string):
+        img_file = ''
+        if len(base64_string)  <= FILENAME_LENGTH_LIMIT:
+            # str may have file: prefix
+            filename = base64_string[7:] if base64_string.startswith('file://') else base64_string
+            if os.path.isfile(filename):
+                img_file = filename
 
-        # decode from utf-8 when needed
-        if isinstance(base64_string, bytes):
-            base64_string = base64_string.decode("utf-8")
+        if not img_file:
+            # decode from utf-8 when needed
+            if isinstance(base64_string, bytes):
+                base64_string = base64_string.decode("utf-8")
 
-        # remove MIME part
-        base64_string = base64_string.partition(",")[2]
+            # remove MIME part
+            base64_string = base64_string.partition(",")[2]
 
-        # convert to right form
-        imgdata = base64.b64decode(base64_string)
+            # convert to right form
+            imgdata = base64.b64decode(base64_string)
 
-        # open as binary file
-        img_file = BytesIO(imgdata)
+            # open as binary file
+            img_file = BytesIO(imgdata)
 
         return Image.open(img_file)
 
