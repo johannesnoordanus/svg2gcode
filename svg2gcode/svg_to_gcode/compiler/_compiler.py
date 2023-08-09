@@ -68,7 +68,6 @@ class Compiler:
         # image gcode
         self.gcode: list[str] = []
 
-
     def compile(self, passes=1):
 
         """
