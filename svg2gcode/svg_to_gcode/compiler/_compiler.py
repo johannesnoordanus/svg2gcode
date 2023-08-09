@@ -1,4 +1,5 @@
 import os
+import re
 import warnings
 import math
 import copy
@@ -16,8 +17,6 @@ from svg2gcode.svg_to_gcode import DEFAULT_SETTING
 from svg2gcode.svg_to_gcode import TOLERANCES, SETTING, check_setting
 
 from svg2gcode import __version__
-
-FILENAME_LENGTH_LIMIT = 255
 
 from PIL import Image
 
@@ -88,7 +87,7 @@ class Compiler:
 
         if self._boundingbox:
             gcode += [ f"; Boundingbox: (X{self._boundingbox[0].x:.{0 if self._boundingbox[0].x.is_integer() else self.precision}f},"
-                       f"Y{self._boundingbox[0].y:.{0 if self._boundingbox[0].y.is_integer() else self.precision}f}) to "
+                       f"Y{self._boundingbox[0].y:.{0 if self._boundingbox[0].y.is_integer() else self.precision}f}):"
                        f"(X{self._boundingbox[1].x:.{0 if self._boundingbox[1].x.is_integer() else self.precision}f},"
                        f"Y{self._boundingbox[1].y:.{0 if self._boundingbox[1].y.is_integer() else self.precision}f})"]
 
@@ -178,15 +177,15 @@ class Compiler:
                 # set movement (cutting) speed, set laser mode and power on
                 code = [self.interface.laser_off(), self.interface.rapid_move(start.x, start.y),
                         self.interface.set_movement_speed(self.settings["movement_speed"]),
-                        self.interface.set_laser_mode(self.settings["laser_mode"]), self.interface.set_laser_power(self.settings["laser_power"])]
+                        self.interface.set_laser_mode(self.settings["laser_mode"]), self.interface.set_laser_power_value(self.settings["laser_power"])]
 
                 self._boundingbox = [copy.deepcopy(start), copy.deepcopy(start)] if self._boundingbox is None else self._boundingbox
             else:
                 # move to the next line_chain: set laser mode, set laser power to 0 (cutting is off),
                 # set movement speed, (no rapid) move to start of chain, set laser to power
-                code = [self.interface.set_laser_mode(self.settings["laser_mode"]), self.interface.set_laser_power(0),
+                code = [self.interface.set_laser_mode(self.settings["laser_mode"]), self.interface.set_laser_power_value(0),
                         self.interface.set_movement_speed(self.settings["movement_speed"]), self.interface.linear_move(start.x, start.y),
-                        self.interface.set_laser_power(self.settings["laser_power"])]
+                        self.interface.set_laser_power_value(self.settings["laser_power"])]
 
             if self.settings["dwell_time"] > 0:
                 code = [self.interface.dwell(self.settings["dwell_time"])] + code
@@ -201,27 +200,42 @@ class Compiler:
 
         self.body.extend(code)
 
+    def isBase64(self, b64str):
+        try:
+            base64.b64decode(b64str)
+            return True
+        except Exception as e:
+            return False
+
     def decode_base64(self, base64_string):
+        """
+        Get base64 image from either embedded data or file.
+        :param base64_string: xlink:href field from SVG document
+        """
         img_file = ''
-        if len(base64_string)  <= FILENAME_LENGTH_LIMIT:
-            # str may have file: prefix
-            filename = base64_string[7:] if base64_string.startswith('file://') else base64_string
-            if os.path.isfile(filename):
-                img_file = filename
 
-        if not img_file:
-            # decode from utf-8 when needed
-            if isinstance(base64_string, bytes):
-                base64_string = base64_string.decode("utf-8")
+        # note: file names (including path) do not have (re): '<>:;,*|\"' characters,
+        #       base64 data has only '([A-Za-z0-9+/]{4})*' (multiples of 4 ended by '='
+        #       character padding). So, char ':' which is part of either prefix, makes
+        #       a match possible.
 
-            # remove MIME part
-            base64_string = base64_string.partition(",")[2]
+        # strip either 'file:...' or 'data:...' prefix (MIME part) from field 'xlink:href'
+        fileordata = re.sub("(^file://|^data:[a-z0-9;/]+,)","", base64_string, flags=re.I)
 
+        if os.path.isfile(fileordata):
+            img_file = fileordata
+
+        elif self.isBase64(fileordata):
             # convert to right form
-            imgdata = base64.b64decode(base64_string)
+            imgdata = base64.b64decode(fileordata)
 
             # open as binary file
             img_file = BytesIO(imgdata)
+        else:
+            # Neither file nor data
+            print(f'xlink:href="{base64_string[:30]}"')
+            print("Image data error: neither file nor data!")
+            return None
 
         return Image.open(img_file)
 
@@ -233,19 +247,21 @@ class Compiler:
 
         # convert image from base64 string
         img = self.decode_base64(image)
-        #img.show()
 
         # convert image to new size
-        img = img.resize((int(float(img_attrib['width']) * 1/float(pixelsize)), int(float(img_attrib['height']) * 1/float(pixelsize))), Image.Resampling.LANCZOS)
+        if img is not None:
+            img = img.resize((int(float(img_attrib['width']) * 1/float(pixelsize)), int(float(img_attrib['height']) * 1/float(pixelsize))), Image.Resampling.LANCZOS)
 
-        # convert to B&W without alpha
-        #img = img.convert("LA")
-        img = img.convert("L")
-        if self.settings['showimage']:
-            img.show()
+            # convert to B&W without alpha
+            #img = img.convert("LA")
+            img = img.convert("L")
+            if self.settings['showimage']:
+                img.show()
 
-        # convert to nparray for fast handling
-        return np.array(img)
+            # convert to nparray for fast handling
+            return np.array(img)
+
+        return None
 
     def image2gcode(self, img_attrib: dict[str, Any], img=None, transformation = None):
 
@@ -355,8 +371,9 @@ class Compiler:
                 # convert image (scale and type)
                 img = self.convert_image(curve.image, curve.img_attrib)
 
-                # Draw image by converting raster image scan lines to gcode, possibly applying tranformations on each pixel
-                self.image2gcode(curve.img_attrib, img, curve.transformation)
+                if img is not None:
+                    # Draw image by converting raster image scan lines to gcode, possibly applying tranformations on each pixel
+                    self.image2gcode(curve.img_attrib, img, curve.transformation)
             else:
                 # curve is 'path', draw it
                 # Draws curves by approximating them as line segments and calling self.append_line_chain().
