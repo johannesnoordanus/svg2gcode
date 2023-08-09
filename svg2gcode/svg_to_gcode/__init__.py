@@ -7,8 +7,8 @@ DISTANCEMODE 	= {"absolute", "incremental"}
 SETTING 	= {
     # Machine parameters
     "laser_mode_enable", 	# boolean 		sets grlb 1.1 laser mode (set default on most laser cutters)
-    "minimum_laser_power",	# positive integer	sets lowest power value for laser
-    "maximum_laser_power",	# positive integer	sets highest power value for laser (make sure this is set to the machine max)
+    "minimum_laser_power",	# positive integer	sets lowest power value for laser (NOTE: currently unused)
+    "maximum_laser_power",	# positive integer	sets highest power value for laser (NOTE: currently unused)
     "x_axis_maximum_rate",	# positive integer	maximum X-axis speed (typically mm/sec or mm/min) (NOTE: currently unused)
     "y_axis_maximum_rate",	# positive integer	maximum Y-axis speed (typically mm/sec or mm/min) (NOTE: currently unused)
     "x_axis_maximum_travel",	# positive integer	X-axis length of machine work area (mm)
@@ -48,7 +48,7 @@ DEFAULT_SETTING 	= {
     "pass_depth": 		0,		# default set to 0 (no depth)
     "dwell_time": 		0,		# default set to 0 (do not linger)
     "movement_speed": 		None,		# MANDATORY
-    "laser_power": 		1,		# default set to 1
+    "laser_power": 		1000,		# default set to 1
     "laser_mode": 		"dynamic",	# default set to dynamic (M4 safest mode, laser is off when not moving)
     "maximum_image_laser_power":None,           # MANDATORY should be ("maximum_laser_power" - "minimum_laser_power" / 3)
     "image_movement_speed":     None,           # MANDATORY
@@ -84,18 +84,12 @@ def check_setting(setting: dict[str,Any] =None) -> bool:
             raise ValueError(f"Unknown '{key}' value '{setting[key]}'. Please specify one of the following: {{True,False}}")
         if key in {"minimum_laser_power","maximum_laser_power","x_axis_maximum_rate","y_axis_maximum_rate", "movement_speed",
                    "x_axis_maximum_travel","y_axis_maximum_travel", "maximum_image_laser_power",
-                   "image_movement_speed" } and (not isinstance(setting[key],int) or setting[key] < 0):
+                   "image_movement_speed","laser_power" } and (not isinstance(setting[key],int) or setting[key] < 0):
             raise ValueError(f"'{key}' has type {type(setting[key])} and value {setting[key]}, but should be of type {type(1)} and have a value >= 0")
         # Toolparameters
         if key in {"pass_depth","dwell_time"}:
             if not isinstance(setting[key],(int,float)) or setting[key] < 0:
                 raise ValueError(f"'{key}' has type {type(setting[key])} and value {setting[key]}, but should be of type {type(1)} and have a value >= 0")
-            setting[key] = float(setting[key])
-        if key == "laser_power":
-            if not isinstance(setting[key],(int,float)):
-                raise TypeError(f"'{key}' is of type '{type(setting[key])}' but should be of type {type(1.0)}")
-            if setting[key] > 1 or setting[key] < 0:
-                raise ValueError(f"'{key}' value {setting[key]} is not in range [0..1]")
             setting[key] = float(setting[key])
         if key == "laser_mode" and setting[key] not in LASERMODE:
             raise ValueError(f"Unknown '{key}' '{setting[key]}'. Please specify one of the following: {LASERMODE}")
