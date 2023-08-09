@@ -46,10 +46,8 @@ options:
                         cutting speed in mm/min
   --imagepower <default:300>
                         maximum laser power while drawing an image (as a rule of thumb set to 1/3 of the machine maximum)
-  --cuttingpower <default:0.85>
-                        percentage of maximum laser power for line drawings/cutting
-  --maxlaserpower <default:1000>
-                        maximum laser power of laser cutter
+  --cuttingpower <default:850>
+                        sets laser power of line drawings/cutting
   --rapidmove           generate inbetween G0 moves
   --xmaxtravel <default:300>
                         machine x-axis lengh in mm
