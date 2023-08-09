@@ -70,6 +70,16 @@ class Interface:
         """
         raise NotImplementedError("Interface class must implement set_laser_power")
 
+    def set_laser_power_value(self, machine_value) -> str:
+        """
+        Set laser power directly - in target machine values - not as a fraction.
+
+        :param power: Defines the power value of the laser.
+        Valid values range between minimum_laser_power and maximum_laser_power
+        :return: Appropriate command.
+        """
+        raise NotImplementedError("Interface class must implement set_laser_power")
+
     def set_laser_mode(self, mode) -> str:
         """
         Set lasermode to either 'constant' or 'dynamic'.
