@@ -18,12 +18,22 @@ def svg2gcode(args) -> int:
     """
     image2gcode: convert svg to gcode
     """
+    p = {'laser_power':args.cuttingpower,
+         'movement_speed':args.cuttingspeed,
+         'pixel_size':args.pixelsize,
+
+         'maximum_image_laser_power':args.imagepower,
+         'image_movement_speed':args.imagespeed,
+         'fan':args.fan,
+         'rapid_move':args.rapidmove,
+
+         'showimage':args.showimage,
+         'x_axis_maximum_travel':args.xmaxtravel,
+         'y_axis_maximum_travel':args.ymaxtravel}
     try:
         # Instantiate a compiler, specifying the interface type and the speed at which the tool should move (for both image drawings and laser cutting).
         # For line drawings 'pass_depth' controls how far down the tool moves after every pass. Set it to 0 if your machine does not support Z axis movement.
-        gcode_compiler = Compiler(interfaces.Gcode, params={'laser_power':args.cuttingpower,'movement_speed':args.cuttingspeed, 'pixel_size':args.pixelsize,
-                        'maximum_image_laser_power':args.imagepower, 'image_movement_speed':args.imagespeed, 'fan':args.fan,'rapid_move':args.rapidmove,
-                        'showimage':args.showimage, 'x_axis_maximum_travel':args.xmaxtravel,'y_axis_maximum_travel':args.ymaxtravel})
+        gcode_compiler = Compiler(interfaces.Gcode, params=p)
         # emit gcode for svg
         gcode_compiler.compile_to_file(args.gcode, parse_file(args.svg), passes=1)
 
