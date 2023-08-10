@@ -2,7 +2,9 @@
 svg2gcode: convert an image to gcode.
 """
 
+import os
 import sys
+import tomllib
 import argparse
 
 from svg2gcode.svg_to_gcode.svg_parser import parse_file
@@ -48,14 +50,23 @@ def main() -> int:
     """
     main
     """
+    config_file = os.path.expanduser('~/.config/svg2gcode.toml')
+
     # defaults
-    pixelsize_default = 0.1
-    imagespeed_default = 800
-    cuttingspeed_default = 1000
-    imagepower_default = 300
-    cuttingpower_default = 850
-    xmaxtravel_default = 300
-    ymaxtravel_default = 400
+    cfg = {
+        "pixelsize_default" : 0.1,
+        "imagespeed_default" : 800,
+        "cuttingspeed_default" : 1000,
+        "imagepower_default" : 300,
+        "cuttingpower_default" : 850,
+        "xmaxtravel_default" : 300,
+        "ymaxtravel_default" : 400,
+    }
+
+    if os.path.exists(config_file):
+        with open(config_file, 'rb') as f:
+            cfg.update({k + '_default': v for k,v in tomllib.load(f).items()})
+
 
     # Define command line argument interface
     parser = argparse.ArgumentParser(description='Convert svg to gcode for GRBL v1.1 compatible diode laser engravers.')
@@ -63,20 +74,20 @@ def main() -> int:
     parser.add_argument('gcode', type=str, help='gcode output file')
     parser.add_argument('--showimage', action='store_true', default=False, help='show b&w converted image' )
     parser.add_argument('--monochrome', action='store_true', default=False, help='Convert to pure black and white' )
-    parser.add_argument('--pixelsize', default=pixelsize_default, metavar="<default:" + str(pixelsize_default)+">",
+    parser.add_argument('--pixelsize', default=cfg["pixelsize_default"], metavar="<default:" + str(cfg["pixelsize_default"])+">",
         type=float, help="pixel size in mm (XY-axis): each image pixel is drawn this size")
-    parser.add_argument('--imagespeed', default=imagespeed_default, metavar="<default:" + str(imagespeed_default)+">",
+    parser.add_argument('--imagespeed', default=cfg["imagespeed_default"], metavar="<default:" + str(cfg["imagespeed_default"])+">",
         type=int, help='image draw speed in mm/min')
-    parser.add_argument('--cuttingspeed', default=cuttingspeed_default, metavar="<default:" + str(cuttingspeed_default)+">",
+    parser.add_argument('--cuttingspeed', default=cfg["cuttingspeed_default"], metavar="<default:" + str(cfg["cuttingspeed_default"])+">",
         type=int, help='cutting speed in mm/min')
-    parser.add_argument('--imagepower', default=imagepower_default, metavar="<default:" +str(imagepower_default)+ ">",
+    parser.add_argument('--imagepower', default=cfg["imagepower_default"], metavar="<default:" +str(cfg["imagepower_default"])+ ">",
         type=int, help="maximum laser power while drawing an image (as a rule of thumb set to 1/3 of the machine maximum)")
-    parser.add_argument('--cuttingpower', default=cuttingpower_default, metavar="<default:" +str(cuttingpower_default)+ ">",
+    parser.add_argument('--cuttingpower', default=cfg["cuttingpower_default"], metavar="<default:" +str(cfg["cuttingpower_default"])+ ">",
         type=int, help="sets laser power of line drawings/cutting")
     parser.add_argument('--rapidmove', action='store_true', default=True, help='generate inbetween G0 moves' )
-    parser.add_argument('--xmaxtravel', default=xmaxtravel_default, metavar="<default:" +str(xmaxtravel_default)+ ">",
+    parser.add_argument('--xmaxtravel', default=cfg["xmaxtravel_default"], metavar="<default:" +str(cfg["xmaxtravel_default"])+ ">",
         type=int, help="machine x-axis lengh in mm")
-    parser.add_argument('--ymaxtravel', default=ymaxtravel_default, metavar="<default:" +str(ymaxtravel_default)+ ">",
+    parser.add_argument('--ymaxtravel', default=cfg["ymaxtravel_default"], metavar="<default:" +str(cfg["ymaxtravel_default"])+ ">",
         type=int, help="machine y-axis lengh in mm")
     parser.add_argument('--fan', action='store_true', default=False, help='set machine fan on' )
     parser.add_argument('-V', '--version', action='version', version='%(prog)s ' + __version__, help="show version number and exit")
