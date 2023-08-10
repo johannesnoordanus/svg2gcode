@@ -30,7 +30,8 @@ SETTING 	= {
     "rapid_move",		# boolean		when false, do not use rapid move (G0) to go to the next line chain, use a 'slow' (G1) move with laser
 				# 			power off (S0) (note that the first move - to the start of the first line chain - is still a rapid move)
     "pixel_size",               # float                 sets image pixel size (in mm)
-    "showimage"                 # boolean               show image used for conversion to gcode
+    "showimage",                 # boolean               show image used for conversion to gcode
+    "monochrome"                # boolean       converts to dithered pure black and white
 }
 
 # Set defaults 'minimum_laser_power', 'pass_depth', 'dwell_time', 'laser_power', 'laser_mode', 'unit', 'distance_mode'
@@ -57,7 +58,8 @@ DEFAULT_SETTING 	= {
     "distance_mode": 		"absolute",	# default set to absolute
     "rapid_move":		True,		# default set to true
     "pixel_size":               0.1,            # laser kerf is mostly < 0.1mm
-    "showimage":                False           # default image is not shown
+    "showimage":                False,           # default image is not shown
+    "monochrome":                False           # default allows grey levels / intermediate shades
 }
 
 def check_setting(setting: dict[str,Any] =None) -> bool:

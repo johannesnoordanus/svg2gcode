@@ -27,6 +27,7 @@ def svg2gcode(args) -> int:
          'fan':args.fan,
          'rapid_move':args.rapidmove,
 
+         'monochrome': args.monochrome,
          'showimage':args.showimage,
          'x_axis_maximum_travel':args.xmaxtravel,
          'y_axis_maximum_travel':args.ymaxtravel}
@@ -61,6 +62,7 @@ def main() -> int:
     parser.add_argument('svg', type=str, help='svg file to be converted to gcode')
     parser.add_argument('gcode', type=str, help='gcode output file')
     parser.add_argument('--showimage', action='store_true', default=False, help='show b&w converted image' )
+    parser.add_argument('--monochrome', action='store_true', default=False, help='Convert to pure black and white' )
     parser.add_argument('--pixelsize', default=pixelsize_default, metavar="<default:" + str(pixelsize_default)+">",
         type=float, help="pixel size in mm (XY-axis): each image pixel is drawn this size")
     parser.add_argument('--imagespeed', default=imagespeed_default, metavar="<default:" + str(imagespeed_default)+">",

@@ -265,7 +265,7 @@ class Compiler:
 
             # convert to B&W without alpha
             #img = img.convert("LA")
-            img = img.convert("L")
+            img = img.convert("1" if self.settings["monochrome"] else "L")
             if self.settings['showimage']:
                 img.show()
 
