@@ -66,26 +66,30 @@ def main() -> int:
         with open(config_file, 'rb') as f:
             defaults.update(tomllib.load(f).items())
 
+    def getMetaStr(v):
+        "Returns annotations on a variable"
+        return f"<default: {defaults[v]}>"
+
     # Define command line argument interface
     parser = argparse.ArgumentParser(description='Convert svg to gcode for GRBL v1.1 compatible diode laser engravers.')
     parser.add_argument('svg', type=str, help='svg file to be converted to gcode')
     parser.add_argument('gcode', type=str, help='gcode output file')
     parser.add_argument('--showimage', action='store_true', default=False, help='show b&w converted image' )
     parser.add_argument('--monochrome', action='store_true', default=False, help='Convert to pure black and white' )
-    parser.add_argument('--pixelsize', default=defaults["pixelsize"], metavar="<default:" + str(defaults["pixelsize"])+">",
+    parser.add_argument('--pixelsize', default=defaults["pixelsize"], metavar=getMetaStr("pixelsize"),
         type=float, help="pixel size in mm (XY-axis): each image pixel is drawn this size")
-    parser.add_argument('--imagespeed', default=defaults["imagespeed"], metavar="<default:" + str(defaults["imagespeed"])+">",
+    parser.add_argument('--imagespeed', default=defaults["imagespeed"], metavar=getMetaStr("imagespeed"),
         type=int, help='image draw speed in mm/min')
-    parser.add_argument('--cuttingspeed', default=defaults["cuttingspeed"], metavar="<default:" + str(defaults["cuttingspeed"])+">",
+    parser.add_argument('--cuttingspeed', default=defaults["cuttingspeed"], metavar=getMetaStr("cuttingspeed"),
         type=int, help='cutting speed in mm/min')
-    parser.add_argument('--imagepower', default=defaults["imagepower"], metavar="<default:" +str(defaults["imagepower"])+ ">",
+    parser.add_argument('--imagepower', default=defaults["imagepower"], metavar=getMetaStr("imagepower"),
         type=int, help="maximum laser power while drawing an image (as a rule of thumb set to 1/3 of the machine maximum)")
-    parser.add_argument('--cuttingpower', default=defaults["cuttingpower"], metavar="<default:" +str(defaults["cuttingpower"])+ ">",
+    parser.add_argument('--cuttingpower', default=defaults["cuttingpower"], metavar=getMetaStr("cuttingpower"),
         type=int, help="sets laser power of line drawings/cutting")
     parser.add_argument('--rapidmove', action='store_true', default=True, help='generate inbetween G0 moves' )
-    parser.add_argument('--xmaxtravel', default=defaults["xmaxtravel"], metavar="<default:" +str(defaults["xmaxtravel"])+ ">",
+    parser.add_argument('--xmaxtravel', default=defaults["xmaxtravel"], metavar=getMetaStr("xmaxtravel"),
         type=int, help="machine x-axis lengh in mm")
-    parser.add_argument('--ymaxtravel', default=defaults["ymaxtravel"], metavar="<default:" +str(defaults["ymaxtravel"])+ ">",
+    parser.add_argument('--ymaxtravel', default=defaults["ymaxtravel"], metavar=getMetaStr("ymaxtravel"),
         type=int, help="machine y-axis lengh in mm")
     parser.add_argument('--fan', action='store_true', default=False, help='set machine fan on' )
     parser.add_argument('-V', '--version', action='version', version='%(prog)s ' + __version__, help="show version number and exit")
