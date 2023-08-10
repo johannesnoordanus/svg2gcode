@@ -1,6 +1,6 @@
 import os
 import re
-import warnings
+import logging
 import math
 import copy
 
@@ -19,6 +19,10 @@ from svg2gcode.svg_to_gcode import TOLERANCES, SETTING, check_setting
 from svg2gcode import __version__
 
 from PIL import Image
+
+logging.basicConfig()
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 class Compiler:
     """
@@ -68,6 +72,7 @@ class Compiler:
         # image gcode
         self.gcode: list[str] = []
 
+
     def compile(self, passes=1):
 
         """
@@ -79,7 +84,8 @@ class Compiler:
         """
 
         if len(self.body) == 0:
-            warnings.warn("Compile with an empty body (no curves).")
+            logger.debug("Compile with an empty body (no curves).")
+            return ''
 
 	# add generator info and boundingbox for this code
         gcode = [f"; svg2gcode {__version__}", f"; GRBL 1.1, unit={self.settings['unit']}, {self.settings['distance_mode']} coordinates"]
@@ -92,11 +98,11 @@ class Compiler:
 
             if not self.check_bounds():
                 if self.settings["distance_mode"] == "absolute" and self.check_axis_maximum_travel():
-                    warnings.warn("Cut is not within machine bounds.")
+                    logger.warn("Cut is not within machine bounds.")
                     gcode += ["; WARNING: Cut is not within machine bounds of "
                               f"X[0,{self.settings['x_axis_maximum_travel']}], Y[0,{self.settings['y_axis_maximum_travel']}]"]
                 elif not self.check_axis_maximum_travel():
-                    # warnings.warn("Please define machine cutting area, set parameter: 'x_axis_maximum_travel' and 'y_axis_maximum_travel'")
+                    # logger.warn("Please define machine cutting area, set parameter: 'x_axis_maximum_travel' and 'y_axis_maximum_travel'")
                     gcode += ["; WARNING: Please define machine cutting area, set parameter: 'x_axis_maximum_travel' and 'y_axis_maximum_travel'"]
                 else:
                     gcode += [f"; WARNING: distance mode is not absolute: {self.settings['distance_mode']}"]
@@ -144,17 +150,23 @@ class Compiler:
         self.append_curves(curves)
 
         # write path objects
-        with open(file_name, 'w') as file:
-            file.write(self.compile(passes=passes))
+        gcode = self.compile(passes=passes)
+        if gcode:
+            with open(file_name, 'w') as file:
+                file.write(gcode)
+            logger.info(f"Generated {file_name}")
+        else:
+            logger.warn(f'No cutting data found, skipping "{file_name}"')
 
+        image_gcode_filename = file_name.rsplit('.',1)[0] + "_images." + file_name.rsplit('.',1)[1]
         if len(self.gcode) == 0:
-            if self.settings['showimage']:
-                warnings.warn("Cannot show images (SVG has none).")
+            logger.warn(f'No image found, skipping "{image_gcode_filename}"')
         else:
             images_gcode = self.compile_images()
             # write image objects
-            with open(file_name.rsplit('.',1)[0] + "_images." + file_name.rsplit('.',1)[1], 'w') as file:
+            with open(image_gcode_filename, 'w') as file:
                 file.write(images_gcode)
+            logger.info(f"Generated {image_gcode_filename}")
 
     def append_line_chain(self, line_chain: LineSegmentChain):
         """
@@ -163,7 +175,7 @@ class Compiler:
         """
 
         if line_chain.chain_size() == 0:
-            warnings.warn("Attempted to parse empty LineChain")
+            logger.warn("Attempted to parse empty LineChain")
             return
 
         code = []
@@ -384,7 +396,7 @@ class Compiler:
 
     def check_axis_maximum_travel(self):
         return self.settings["x_axis_maximum_travel"] is not None and self.settings["y_axis_maximum_travel"] is not None
-        # warnings.warn("Please define machine cutting area, set parameter: 'x_axis_maximum_travel' and 'y_axis_maximum_travel'")
+        # logger.warn("Please define machine cutting area, set parameter: 'x_axis_maximum_travel' and 'y_axis_maximum_travel'")
 
     def check_bounds(self):
         """
