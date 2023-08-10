@@ -131,7 +131,7 @@ class Compiler:
         Assembles the code in the header, body and footer.
         """
 
-        header_gc = ["M5","M8", "M4"]
+        header_gc = ["M5","M8", "M4" if self.settings['laser_mode'] == 'dynamic' else "M3"]
         # laser off, fan off, program stop
         footer_gc = ["M5","M9","M2"]
 

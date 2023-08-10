@@ -29,6 +29,8 @@ def svg2gcode(args) -> int:
          'fan':args.fan,
          'rapid_move':args.rapidmove,
 
+         'laser_mode': args.mode,
+
          'monochrome': args.monochrome,
          'showimage':args.showimage,
          'x_axis_maximum_travel':args.xmaxtravel,
@@ -58,6 +60,7 @@ def main() -> int:
         "cuttingspeed" : 1000,
         "imagepower" : 300,
         "cuttingpower" : 850,
+        "mode": 'dynamic',
         "xmaxtravel" : 300,
         "ymaxtravel" : 400,
     }
@@ -92,6 +95,7 @@ def main() -> int:
     parser.add_argument('--ymaxtravel', default=defaults["ymaxtravel"], metavar=getMetaStr("ymaxtravel"),
         type=int, help="machine y-axis lengh in mm")
     parser.add_argument('--fan', action='store_true', default=False, help='set machine fan on' )
+    parser.add_argument('--mode', default=defaults["mode"], help='Set laser mode to dynamic or constant', metavar=getMetaStr("mode") )
     parser.add_argument('-V', '--version', action='version', version='%(prog)s ' + __version__, help="show version number and exit")
 
     args = parser.parse_args()

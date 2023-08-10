@@ -6,7 +6,6 @@ LASERMODE	= {"constant", "dynamic"}
 DISTANCEMODE 	= {"absolute", "incremental"}
 SETTING 	= {
     # Machine parameters
-    "laser_mode_enable", 	# boolean 		sets grlb 1.1 laser mode (set default on most laser cutters)
     "minimum_laser_power",	# positive integer	sets lowest power value for laser (NOTE: currently unused)
     "maximum_laser_power",	# positive integer	sets highest power value for laser (NOTE: currently unused)
     "x_axis_maximum_rate",	# positive integer	maximum X-axis speed (typically mm/sec or mm/min) (NOTE: currently unused)
@@ -37,7 +36,6 @@ SETTING 	= {
 # Set defaults 'minimum_laser_power', 'pass_depth', 'dwell_time', 'laser_power', 'laser_mode', 'unit', 'distance_mode'
 DEFAULT_SETTING 	= {
     # Machine parameters
-    "laser_mode_enable": 	None,		# usually already on
     "minimum_laser_power": 	0,		# default set to 0
     "maximum_laser_power": 	None,		# MANDATORY ('enter $$' on the machine console to get this - and other machine parameters)
     "x_axis_maximum_rate": 	None,		# currently unused
@@ -82,8 +80,6 @@ def check_setting(setting: dict[str,Any] =None) -> bool:
         if key not in SETTING:
             raise ValueError(f"Unknown setting {key}. Please specify one of the following: {SETTING}")
         # Machine parameters
-        if key == "laser_mode_enable" and setting[key] not in {True,False}:
-            raise ValueError(f"Unknown '{key}' value '{setting[key]}'. Please specify one of the following: {{True,False}}")
         if key in {"minimum_laser_power","maximum_laser_power","x_axis_maximum_rate","y_axis_maximum_rate", "movement_speed",
                    "x_axis_maximum_travel","y_axis_maximum_travel", "maximum_image_laser_power",
                    "image_movement_speed","laser_power" } and (not isinstance(setting[key],int) or setting[key] < 0):
