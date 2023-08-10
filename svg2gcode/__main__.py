@@ -53,7 +53,6 @@ def main() -> int:
     cuttingspeed_default = 1000
     imagepower_default = 300
     cuttingpower_default = 850
-    laserpower_default = 1000
     xmaxtravel_default = 300
     ymaxtravel_default = 400
 
