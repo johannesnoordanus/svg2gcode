@@ -6,7 +6,6 @@ LASERMODE	= {"constant", "dynamic"}
 DISTANCEMODE 	= {"absolute", "incremental"}
 SETTING 	= {
     # Machine parameters
-    "laser_mode_enable", 	# boolean 		sets grlb 1.1 laser mode (set default on most laser cutters)
     "minimum_laser_power",	# positive integer	sets lowest power value for laser (NOTE: currently unused)
     "maximum_laser_power",	# positive integer	sets highest power value for laser (NOTE: currently unused)
     "x_axis_maximum_rate",	# positive integer	maximum X-axis speed (typically mm/sec or mm/min) (NOTE: currently unused)
@@ -30,13 +29,13 @@ SETTING 	= {
     "rapid_move",		# boolean		when false, do not use rapid move (G0) to go to the next line chain, use a 'slow' (G1) move with laser
 				# 			power off (S0) (note that the first move - to the start of the first line chain - is still a rapid move)
     "pixel_size",               # float                 sets image pixel size (in mm)
-    "showimage"                 # boolean               show image used for conversion to gcode
+    "showimage",                 # boolean               show image used for conversion to gcode
+    "monochrome"                # boolean       converts to dithered pure black and white
 }
 
 # Set defaults 'minimum_laser_power', 'pass_depth', 'dwell_time', 'laser_power', 'laser_mode', 'unit', 'distance_mode'
 DEFAULT_SETTING 	= {
     # Machine parameters
-    "laser_mode_enable": 	None,		# usually already on
     "minimum_laser_power": 	0,		# default set to 0
     "maximum_laser_power": 	None,		# MANDATORY ('enter $$' on the machine console to get this - and other machine parameters)
     "x_axis_maximum_rate": 	None,		# currently unused
@@ -57,7 +56,8 @@ DEFAULT_SETTING 	= {
     "distance_mode": 		"absolute",	# default set to absolute
     "rapid_move":		True,		# default set to true
     "pixel_size":               0.1,            # laser kerf is mostly < 0.1mm
-    "showimage":                False           # default image is not shown
+    "showimage":                False,           # default image is not shown
+    "monochrome":                False           # default allows grey levels / intermediate shades
 }
 
 def check_setting(setting: dict[str,Any] =None) -> bool:
@@ -80,8 +80,6 @@ def check_setting(setting: dict[str,Any] =None) -> bool:
         if key not in SETTING:
             raise ValueError(f"Unknown setting {key}. Please specify one of the following: {SETTING}")
         # Machine parameters
-        if key == "laser_mode_enable" and setting[key] not in {True,False}:
-            raise ValueError(f"Unknown '{key}' value '{setting[key]}'. Please specify one of the following: {{True,False}}")
         if key in {"minimum_laser_power","maximum_laser_power","x_axis_maximum_rate","y_axis_maximum_rate", "movement_speed",
                    "x_axis_maximum_travel","y_axis_maximum_travel", "maximum_image_laser_power",
                    "image_movement_speed","laser_power" } and (not isinstance(setting[key],int) or setting[key] < 0):
