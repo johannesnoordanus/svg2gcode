@@ -23,7 +23,8 @@ def svg2gcode(args) -> int:
         # For line drawings 'pass_depth' controls how far down the tool moves after every pass. Set it to 0 if your machine does not support Z axis movement.
         gcode_compiler = Compiler(interfaces.Gcode, params={'laser_power':args.cuttingpower,'movement_speed':args.cuttingspeed, 'pixel_size':args.pixelsize,
                         'maximum_image_laser_power':args.imagepower, 'image_movement_speed':args.imagespeed, 'fan':args.fan,'rapid_move':args.rapidmove,
-                        'showimage':args.showimage, 'x_axis_maximum_travel':args.xmaxtravel,'y_axis_maximum_travel':args.ymaxtravel})
+                        'showimage':args.showimage, 'x_axis_maximum_travel':args.xmaxtravel,'y_axis_maximum_travel':args.ymaxtravel, 'image_noise':args.noise,
+                        'laser_mode':"constant" if args.constantburn else "dynamic" })
         # emit gcode for svg
         gcode_compiler.compile_to_file(args.gcode, parse_file(args.svg), passes=1)
 
@@ -43,9 +44,10 @@ def main() -> int:
     cuttingspeed_default = 1000
     imagepower_default = 300
     cuttingpower_default = 850
-    laserpower_default = 1000
     xmaxtravel_default = 300
     ymaxtravel_default = 400
+    rapidmove_default = 10
+    noise_default = 0
 
     # Define command line argument interface
     parser = argparse.ArgumentParser(description='Convert svg to gcode for GRBL v1.1 compatible diode laser engravers.')
@@ -59,10 +61,14 @@ def main() -> int:
     parser.add_argument('--cuttingspeed', default=cuttingspeed_default, metavar="<default:" + str(cuttingspeed_default)+">",
         type=int, help='cutting speed in mm/min')
     parser.add_argument('--imagepower', default=imagepower_default, metavar="<default:" +str(imagepower_default)+ ">",
-        type=int, help="maximum laser power while drawing an image (as a rule of thumb set to 1/3 of the machine maximum)")
+        type=int, help="maximum laser power while drawing an image (as a rule of thumb set to 1/3 of the machine maximum for a 5W laser)")
     parser.add_argument('--cuttingpower', default=cuttingpower_default, metavar="<default:" +str(cuttingpower_default)+ ">",
         type=int, help="sets laser power of line drawings/cutting")
-    parser.add_argument('--rapidmove', action='store_true', default=True, help='generate inbetween G0 moves' )
+    parser.add_argument('--rapidmove', default=rapidmove_default, metavar="<default:" +str(rapidmove_default)+ ">",
+        type=int, help='generate G0 moves between shapes, for images: G0 moves when skipping more than 10mm (default), 0 is no G0 moves' )
+    parser.add_argument('--noise', default=noise_default, metavar="<default:" +str(noise_default)+ ">",
+        type=int, help='reduces image noise by not emitting pixels with power lower or equal than this setting')
+    parser.add_argument('--constantburn', action='store_true', default=False, help='use constant burn mode M3 (a bit more dangerous!), instead of dynamic burn mode M4')
     parser.add_argument('--xmaxtravel', default=xmaxtravel_default, metavar="<default:" +str(xmaxtravel_default)+ ">",
         type=int, help="machine x-axis lengh in mm")
     parser.add_argument('--ymaxtravel', default=ymaxtravel_default, metavar="<default:" +str(ymaxtravel_default)+ ">",
