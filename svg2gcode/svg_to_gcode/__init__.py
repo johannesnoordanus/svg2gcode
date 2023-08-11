@@ -7,8 +7,8 @@ DISTANCEMODE 	= {"absolute", "incremental"}
 SETTING 	= {
     # Machine parameters
     "laser_mode_enable", 	# boolean 		sets grlb 1.1 laser mode (set default on most laser cutters)
-    "minimum_laser_power",	# positive integer	sets lowest power value for laser (NOTE: currently unused)
-    "maximum_laser_power",	# positive integer	sets highest power value for laser (NOTE: currently unused)
+    "minimum_laser_power",	# positive integer	sets lowest power value for laser
+    "maximum_laser_power",	# positive integer	sets highest power value for laser (make sure this is set to the machine max)
     "x_axis_maximum_rate",	# positive integer	maximum X-axis speed (typically mm/sec or mm/min) (NOTE: currently unused)
     "y_axis_maximum_rate",	# positive integer	maximum Y-axis speed (typically mm/sec or mm/min) (NOTE: currently unused)
     "x_axis_maximum_travel",	# positive integer	X-axis length of machine work area (mm)
@@ -24,11 +24,14 @@ SETTING 	= {
     "laser_mode",		# LASERMODE		set constant or dynamic laser power mode
     "maximum_image_laser_power",# positive integer      sets laser power (maximum) for image drawings (this is typically 1/3) of 'maximum_laser_power')
     "image_movement_speed",     # positive integer      sets movement speed when drawing an image (typically a lot less than the 'maximum_rate')
+    "image_noise",              # positive integer      reduces image noise by not emitting pixels lower or equal this setting')
     # Configuration
     "unit",			# UNITS			sets machine unit (milimeters, inches), this also defines the Feed (movement) parameter (mm/min or in/min)
     "distance_mode",		# DISTANCEMODE		sets machine distance mode ('absolute' from 0,0 or 'incremental' from current position)
-    "rapid_move",		# boolean		when false, do not use rapid move (G0) to go to the next line chain, use a 'slow' (G1) move with laser
-				# 			power off (S0) (note that the first move - to the start of the first line chain - is still a rapid move)
+    "rapid_move",		# positive integer	when 0, no rapid moves, > 0, G0 moves to the next line chain (otherwise a slow G1 S0 move is used).
+				# 			(note that the first move - to the start of the first line chain - is always a rapid move)
+                                #                       This setting is overloaded for images: a number 'n' > 0 means, do a rapid (G0) move when skipping
+                                #                       more than 'n'mm
     "pixel_size",               # float                 sets image pixel size (in mm)
     "showimage"                 # boolean               show image used for conversion to gcode
 }
@@ -50,12 +53,13 @@ DEFAULT_SETTING 	= {
     "movement_speed": 		None,		# MANDATORY
     "laser_power": 		1000,		# default set to 1
     "laser_mode": 		"dynamic",	# default set to dynamic (M4 safest mode, laser is off when not moving)
-    "maximum_image_laser_power":None,           # MANDATORY should be ("maximum_laser_power" - "minimum_laser_power" / 3)
+    "maximum_image_laser_power":None,           # MANDATORY should be ("maximum_laser_power" - "minimum_laser_power" / 3 for a 5W laser)
     "image_movement_speed":     None,           # MANDATORY
+    "image_noise":              0,              # default set to not reduces images noise')
     # Configuration
     "unit": 			"mm",		# default set to milimeters
     "distance_mode": 		"absolute",	# default set to absolute
-    "rapid_move":		True,		# default set to true
+    "rapid_move":		10,		# default set to true, for images do a rapid move when skipping more than 10mm
     "pixel_size":               0.1,            # laser kerf is mostly < 0.1mm
     "showimage":                False           # default image is not shown
 }
@@ -84,7 +88,7 @@ def check_setting(setting: dict[str,Any] =None) -> bool:
             raise ValueError(f"Unknown '{key}' value '{setting[key]}'. Please specify one of the following: {{True,False}}")
         if key in {"minimum_laser_power","maximum_laser_power","x_axis_maximum_rate","y_axis_maximum_rate", "movement_speed",
                    "x_axis_maximum_travel","y_axis_maximum_travel", "maximum_image_laser_power",
-                   "image_movement_speed","laser_power" } and (not isinstance(setting[key],int) or setting[key] < 0):
+                   "image_movement_speed","laser_power","rapid_move" } and (not isinstance(setting[key],int) or setting[key] < 0):
             raise ValueError(f"'{key}' has type {type(setting[key])} and value {setting[key]}, but should be of type {type(1)} and have a value >= 0")
         # Toolparameters
         if key in {"pass_depth","dwell_time"}:
@@ -98,8 +102,6 @@ def check_setting(setting: dict[str,Any] =None) -> bool:
             raise ValueError(f"Unknown '{key}' value '{setting[key]}'. Please specify one of the following: {UNITS}")
         if key == "distance_mode" and setting[key] not in DISTANCEMODE:
             raise ValueError(f"Unknown '{key}' value '{setting[key]}'. Please specify one of the following: {DISTANCEMODE}")
-        if key == "rapid_move" and setting[key] not in {True,False}:
-            raise ValueError(f"Unknown '{key}' value '{setting[key]}'. Please specify one of the following: {{True,False}}")
         if key in {"fan","showimage"} and setting[key] not in {True,False}:
             raise ValueError(f"Unknown '{key}' value '{setting[key]}'. Please specify one of the following: {{True,False}}")
         if key == "pixel_size" and setting[key] and (not isinstance(setting[key],(float)) or setting[key] <= 0):
