@@ -68,6 +68,7 @@ class Compiler:
         # image gcode
         self.gcode: list[str] = []
 
+
     def compile(self, passes=1):
 
         """
@@ -125,7 +126,7 @@ class Compiler:
         Assembles the code in the header, body and footer.
         """
 
-        header_gc = ["M5","M8", "M4"]
+        header_gc = ["M5","M8", 'M3' if self.settings["laser_mode"] == "constant" else 'M4']
         # laser off, fan off, program stop
         footer_gc = ["M5","M9","M2"]
 
@@ -249,11 +250,17 @@ class Compiler:
 
         # convert image to new size
         if img is not None:
-            img = img.resize((int(float(img_attrib['width']) * 1/float(pixelsize)), int(float(img_attrib['height']) * 1/float(pixelsize))), Image.Resampling.LANCZOS)
+            # add alpha channel
+            img = img.convert("RGBA")
 
-            # convert to B&W without alpha
-            #img = img.convert("LA")
-            img = img.convert("L")
+            # create a white background and add it to the image
+            img_background = Image.new(mode = "RGBA", size = img.size, color = (255,255,255))
+            img = Image.alpha_composite(img_background, img)
+
+            # convert image to black&white (without alpha) and new size #reminder: 'img = img.convert("LA")'
+            img = img.resize((int(float(img_attrib['width']) * 1/float(pixelsize)),
+                            int(float(img_attrib['height']) * 1/float(pixelsize))), Image.Resampling.LANCZOS).convert("L")
+
             if self.settings['showimage']:
                 img.show()
 
@@ -261,6 +268,14 @@ class Compiler:
             return np.array(img)
 
         return None
+
+    def distance(self, A: (float,float),B: (float,float)):
+        """
+        Does Pythagoras
+        """
+        # |Ax - Bx|^2 + |Ay - By|^2 = C^2
+        # distance = √C^2
+        return math.sqrt(abs(A[0] - B[0])**2 + abs(A[1] - B[1])**2)
 
     def image2gcode(self, img_attrib: dict[str, Any], img=None, transformation = None):
 
@@ -271,9 +286,12 @@ class Compiler:
         pixelsize = img_attrib['gcode_pixelsize'] if 'gcode_pixelsize' in img_attrib else self.settings["pixel_size"]
         maxpower = img_attrib['gcode_maxpower'] if 'gcode_maxpower' in img_attrib else self.settings["maximum_image_laser_power"]
         speed = img_attrib['gcode_speed'] if 'gcode_speed' in img_attrib else self.settings["image_movement_speed"]
+        noise = img_attrib['gcode_noise'] if 'gcode_noise' in img_attrib else self.settings["image_noise"]
+        speedmoves = img_attrib['gcode_speedmoves'] if 'gcode_speedmoves' in img_attrib else self.settings["rapid_move"]
 
         # set header for this image
-        self.gcode += [f"; image name: {img_attrib['id']}, pixelsize: {pixelsize}, speed: {speed}, maxpower: {maxpower}\n;"]
+        self.gcode += [f"; image name: {img_attrib['id']}, pixelsize: {pixelsize}, speed: {speed},\n"
+                       f';             maxpower: {maxpower}, speedmoves {speedmoves}, noise level {noise}\n;\n']
 
         # set X/Y-axis precision to number of digits after the decimal separator
         XY_prec = len(str(pixelsize).split('.')[1])
@@ -303,6 +321,9 @@ class Compiler:
         #
         left2right = True
 
+        # current location of laser head
+        head = (X,Y)
+
         # start print
         for line in img:
 
@@ -321,40 +342,63 @@ class Compiler:
             # Note also that drawing form left to right differs subtly from the reverse
 
             # draw this pixel line
-            #for count, bw in np.ndenumerate(line):
             for count, pixel in enumerate(line):
                 # power proportional to maximum laser power
                 laserpow = round((1.0 - float(pixel/255)) * maxpower) if invert_intensity else round(float(pixel/255) * maxpower)
-                # delay emit first pixel (so all same power pixels can be emitted in one sweep)
+
                 if count == 0:
+                    # delay emit first pixel (so all same power pixels can be emitted in one sweep)
                     prev_pow = laserpow
+                    # set last head loaction on start of the line
+                    lastloc = (X,Y)
 
                 # draw points until change of power
                 if laserpow != prev_pow or count == line.size-1:
-                    if transformation is not None:
-                        XYt = transformation.apply_affine_transformation(Vector(X, Y))
-                        code = f"X{round(XYt[0],XY_prec)}Y{round(XYt[1],XY_prec)}"
-                        code += f"S{prev_pow}"
+                    if prev_pow > noise:
+                        code = ""
+                        if lastloc:
+                            # head is not at correct location, go there
+
+                            # Apply affine transformation (if needed)
+                            # (Note that an affine transformation does not necessarily preserve angles between
+                            #  lines or distances between points!)
+                            XYlastloc = (lastloc[0], lastloc[1]) if transformation is None else \
+                                        transformation.apply_affine_transformation(Vector(lastloc[0], lastloc[1]))
+
+                            XYhead = (head[0], head[1]) if transformation is None else \
+                                     transformation.apply_affine_transformation(Vector(head[0], head[1]))
+
+                            if speedmoves and (self.distance(XYhead,XYlastloc) > speedmoves):
+                                # fast
+                                code = f"G0 X{round(XYlastloc[0],XY_prec)}Y{round(XYlastloc[1],XY_prec)}\nG1\n"
+                            else:
+                                # normal speed
+                                code = f"X{round(XYlastloc[0],XY_prec)}Y{round(XYlastloc[1],XY_prec)}S0\n"
+
+                        # emit point
+                        if transformation is not None:
+                            XYt = transformation.apply_affine_transformation(Vector(X, Y))
+                            code += f"X{round(XYt[0],XY_prec)}Y{round(XYt[1],XY_prec)}S{prev_pow}"
+                        else:
+                            code += f"X{X}S{prev_pow}"
+                        self.gcode += [code]
+
+                        # head at this location
+                        head = (X,Y)
+                        lastloc = None
                     else:
-                        code = f"X{X}"
-                        code += f"S{prev_pow}"
-                    self.gcode += [code]
+                        # didn't move head to location, save it
+                        lastloc = (X,Y)
 
                     if count == line.size-1:
                         continue
-                    # if laserpow != prev_pow
-                    prev_pow = laserpow
+                    prev_pow = laserpow # if laserpow != prev_pow
 
                 # next point
                 X = round(X + (pixelsize if left2right else -pixelsize), XY_prec)
 
-            # go to next scan line
+            # next scan line (defer head movement: lazy head)
             Y = round(Y + pixelsize, XY_prec)
-            if transformation is not None:
-                XYt = transformation.apply_affine_transformation(Vector(X, Y))
-                self.gcode += [f"X{round(XYt[0],XY_prec)}Y{round(XYt[1],XY_prec)}S0"]
-            else:
-                self.gcode += [f"Y{Y}S0"]
 
             # change print direction
             left2right = not left2right
