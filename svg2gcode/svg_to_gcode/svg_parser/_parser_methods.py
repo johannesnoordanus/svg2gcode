@@ -19,7 +19,7 @@ def _has_style(element: ElementTree.Element, key: str, value: str) -> bool:
     return element.get(key) == value or (element.get("style") and f"{key}:{value}" in element.get("style"))
 
 
-def add_viewbox_transformation(transformation: Transformation, transform_origin, vwbox):
+def add_viewbox_transformation(transformation: Transformation, transform_origin, vwbox, origin):
     """
     Transform SVG coordinate system to a math-cartesion coordinate system and correct its origin.
     When viewBox is missing the 'height' value of the viewport is used.
@@ -50,16 +50,28 @@ def add_viewbox_transformation(transformation: Transformation, transform_origin,
         # viewBox "width" and "height" represent the dimensions of the 'svg'
         # (a rectangle - left upper at (vwbox['x'],vwbox['y']) - in user space)
 
+        # Set origin back at viewbox position after flip updown and add
+        # the user specified origin.
+        # When no user origin is specified, this translation is skipped,
+        # which effectively places the viewbox lower left (mind you after
+        # flipupdown) at (0,0) (so the canvas has positive coordinates only).
+
+        # (transformations are in reverse order see 'Note' below)
+        if origin is not None and ((vwbox["x"] + origin[0]) or (vwbox["y"]  + origin[1])):
+            up_transformation.add_translation(vwbox["x"] + origin[0],vwbox["y"] + origin[1])
+
         # Note: If A and B are the matrices of two linear transformations, then the effect of first applying A and then B
         # to a column vector x is given by B(Ax) == (BA)x
         # So, in the below case, transformation order is 'scale' first and 'translation' second.
+
+        # this effectively does a flip updown to set a carthesian coordinate system (origin at bottom left) gcode uses
         up_transformation.add_translation(0, vwbox["height"])       # Translation
         up_transformation.add_scale(1, -1)                          # T * Scale
         # applying it to a vector:                                  # T * S * Vector(x,y)
 
         # viewBox "x" and "y" represent the upper left corner of the document.
-        # when non zero, the upper left corner should be corrected to (0,0)
-        # (a laser or CNC machine has a positive workarea only, which should be as large as possible)
+        # when non zero, the upper left corner should be corrected to (0,0) for
+        # the above flip updown to work correctly
         if vwbox["x"] or vwbox["y"]:
             up_transformation.add_translation(-vwbox["x"],-vwbox["y"])
 
@@ -97,7 +109,7 @@ def get_viewBox(root: ElementTree.Element) -> {}:
 
 
 def parse_root(root: ElementTree.Element, transform_origin=True, viewbox=None, draw_hidden=False,
-               visible_root=True, root_transformation=None) -> List[Curve]:
+               visible_root=True, root_transformation=None, origin=None) -> List[Curve]:
 
     """
     Recursively parse an etree root's children into geometric curves.
@@ -109,6 +121,7 @@ def parse_root(root: ElementTree.Element, transform_origin=True, viewbox=None, d
     :param transform_origin: Whether or not to transform input coordinates from the svg coordinate system to standard
     cartesian system. Depends on viewBox height for calculations.
     :param draw_hidden: Whether or not to draw hidden elements based on their display, visibility and opacity attributes.
+    :param origin: translate origin to (origin[0],origin[1]); when None set viewbox upper left to (0,0)
     :param visible_root: Specifies whether or the root is visible. (Inheritance can be overridden)
     :param root_transformation: Specifies whether the root's transformation. (Transformations are inheritable)
     :return: A list of geometric curves describing the svg. Use the Compiler sub-module to compile them to gcode.
@@ -153,7 +166,7 @@ def parse_root(root: ElementTree.Element, transform_origin=True, viewbox=None, d
         if draw_hidden or visible:
             if element.tag == "{%s}path" % NAMESPACES["svg"]:
                 path = Path(element.attrib['d'],
-                               add_viewbox_transformation(transformation, transform_origin, viewbox))
+                               add_viewbox_transformation(transformation, transform_origin, viewbox, origin))
                 curves.extend(path.curves)
             else:
                 if element.tag == "{%s}image" % NAMESPACES["svg"]:
@@ -161,45 +174,47 @@ def parse_root(root: ElementTree.Element, transform_origin=True, viewbox=None, d
 
                     # instantiate curve (image)
                     ri = RasterImage(element.attrib, element.attrib["{%s}href" % NAMESPACES["xlink"]],
-                                add_viewbox_transformation(transformation, transform_origin, viewbox))
+                                add_viewbox_transformation(transformation, transform_origin, viewbox, origin))
                     curves.append(ri)
 
         # Continue the recursion
-        curves.extend(parse_root(element, transform_origin, viewbox, draw_hidden, visible, transformation))
+        curves.extend(parse_root(element, transform_origin, viewbox, draw_hidden, visible, transformation, origin))
 
     # ToDo implement shapes class
     return curves
 
 
-def parse_string(svg_string: str, transform_origin=True, viewbox=None, draw_hidden=False) -> List[Curve]:
+def parse_string(svg_string: str, transform_origin=True, viewbox=None, draw_hidden=False, delta_origin=None) -> List[Curve]:
     """
-        Recursively parse an svg string into geometric curves. (Wrapper for parse_root)
+    Recursively parse an svg string into geometric curves. (Wrapper for parse_root)
 
-        :param svg_string: The etree element who's children should be recursively parsed. The root will not be drawn.
-        :param viewbox: ViewBox of the SVG, used to transform it to a math-cartesion coordinate system and
-        correct its origin. When the viewBox is missing the viewport (of the root) is used. If the root
-        does not contain a viewBox or viewport, it must be either manually specified or transform must be False.
-        :param transform_origin: Whether or not to transform input coordinates from the svg coordinate system to standard cartesian
-         system. Depends on canvas_height for calculations.
-        :param draw_hidden: Whether or not to draw hidden elements based on their display, visibility and opacity attributes.
-        :return: A list of geometric curves describing the svg. Use the Compiler sub-module to compile them to gcode.
+    :param svg_string: The etree element who's children should be recursively parsed. The root will not be drawn.
+    :param viewbox: ViewBox of the SVG, used to transform it to a math-cartesion coordinate system and
+     correct its origin. When the viewBox is missing the viewport (of the root) is used. If the root
+     does not contain a viewBox or viewport, it must be either manually specified or transform must be False.
+    :param transform_origin: Whether or not to transform input coordinates from the svg coordinate system to standard cartesian
+     system. Depends on canvas_height for calculations.
+    :param draw_hidden: Whether or not to draw hidden elements based on their display, visibility and opacity attributes.
+    :pram origin: translate origin to (origin[0],origin[1]), when None set viewbox upper left to (0,0)
+    :return: A list of geometric curves describing the svg. Use the Compiler sub-module to compile them to gcode.
     """
     root = ElementTree.fromstring(svg_string)
-    return parse_root(root, transform_origin, viewbox, draw_hidden)
+    return parse_root(root, transform_origin, viewbox, draw_hidden, origin=delta_origin)
 
 
-def parse_file(file_path: str, transform_origin=True, viewbox=None, draw_hidden=False) -> List[Curve]:
+def parse_file(file_path: str, transform_origin=True, viewbox=None, draw_hidden=False, delta_origin=None) -> List[Curve]:
     """
-            Recursively parse an svg file into geometric curves. (Wrapper for parse_root)
+    Recursively parse an svg file into geometric curves. (Wrapper for parse_root)
 
-            :param file_path: The etree element who's children should be recursively parsed. The root will not be drawn.
-            :param viewbox: ViewBox of the SVG, used to transform it to a math-cartesion coordinate system and
-            correct its origin. When the viewBox is missing the viewport (of the root) is used. If the root
-            does not contain a viewBox or viewport, it must be either manually specified or transform must be False.
-            :param transform_origin: Whether or not to transform input coordinates from the svg coordinate system to standard cartesian
-             system. Depends on canvas_height for calculations.
-            :param draw_hidden: Whether or not to draw hidden elements based on their display, visibility and opacity attributes.
-            :return: A list of geometric curves describing the svg. Use the Compiler sub-module to compile them to gcode.
-        """
+    :param file_path: The etree element who's children should be recursively parsed. The root will not be drawn.
+    :param viewbox: ViewBox of the SVG, used to transform it to a math-cartesion coordinate system and
+     correct its origin. When the viewBox is missing the viewport (of the root) is used. If the root
+     does not contain a viewBox or viewport, it must be either manually specified or transform must be False.
+    :param transform_origin: Whether or not to transform input coordinates from the svg coordinate system to standard cartesian
+     system. Depends on canvas_height for calculations.
+    :param draw_hidden: Whether or not to draw hidden elements based on their display, visibility and opacity attributes.
+    :param origin: translate origin to (origin[0],origin[1]), when None set viewbox upper left to (0,0)
+    :return: A list of geometric curves describing the svg. Use the Compiler sub-module to compile them to gcode.
+    """
     root = ElementTree.parse(file_path).getroot()
-    return parse_root(root, transform_origin, viewbox, draw_hidden)
+    return parse_root(root, transform_origin, viewbox, draw_hidden, origin=delta_origin)
