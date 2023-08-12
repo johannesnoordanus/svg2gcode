@@ -1,6 +1,6 @@
 import os
 import re
-import warnings
+import logging
 import math
 import copy
 
@@ -20,6 +20,10 @@ from svg2gcode import __version__
 
 from PIL import Image
 
+logging.basicConfig(format="[%(levelname)s] %(message)s (%(name)s:%(lineno)s)")
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
 class Compiler:
     """
     The Compiler class handles the process of drawing geometric objects using interface commands and assembling the
@@ -36,6 +40,7 @@ class Compiler:
                               Default [laser_off, program_end]
 	:param settings: dictionary to specify "unit", "pass_depth", "dwell_time", "movement_speed", etc.
         """
+        self.svg_file_name = None
         self._boundingbox = None
         self.interface = interface_class()
 
@@ -69,6 +74,7 @@ class Compiler:
         self.gcode: list[str] = []
 
 
+
     def compile(self, passes=1):
 
         """
@@ -80,7 +86,8 @@ class Compiler:
         """
 
         if len(self.body) == 0:
-            warnings.warn("Compile with an empty body (no curves).")
+            logger.debug("Compile with an empty body (no curves).")
+            return ''
 
 	# add generator info and boundingbox for this code
         gcode = [f"; svg2gcode {__version__}", f"; GRBL 1.1, unit={self.settings['unit']}, {self.settings['distance_mode']} coordinates"]
@@ -93,11 +100,11 @@ class Compiler:
 
             if not self.check_bounds():
                 if self.settings["distance_mode"] == "absolute" and self.check_axis_maximum_travel():
-                    warnings.warn("Cut is not within machine bounds.")
+                    logger.warn("Cut is not within machine bounds.")
                     gcode += ["; WARNING: Cut is not within machine bounds of "
                               f"X[0,{self.settings['x_axis_maximum_travel']}], Y[0,{self.settings['y_axis_maximum_travel']}]"]
                 elif not self.check_axis_maximum_travel():
-                    # warnings.warn("Please define machine cutting area, set parameter: 'x_axis_maximum_travel' and 'y_axis_maximum_travel'")
+                    # logger.warn("Please define machine cutting area, set parameter: 'x_axis_maximum_travel' and 'y_axis_maximum_travel'")
                     gcode += ["; WARNING: Please define machine cutting area, set parameter: 'x_axis_maximum_travel' and 'y_axis_maximum_travel'"]
                 else:
                     gcode += [f"; WARNING: distance mode is not absolute: {self.settings['distance_mode']}"]
@@ -132,30 +139,38 @@ class Compiler:
 
         return '\n'.join(header_gc + self.gcode + footer_gc)
 
-    def compile_to_file(self, file_name: str, curves: list[Curve], passes=1):
+    def compile_to_file(self, file_name: str, svg_file_name: str, curves: list[Curve], passes=1):
         """
         A wrapper for the self.compile method. Assembles the code in the header, body and footer, saving it to a file.
 
         :param file_name: the path to save the file.
+        :param svg_file_name: the path to the original svg image.
         :param curves: SVG curves approximated by line segments.
         :param passes: the number of passes that should be made. Every pass the machine moves_down (z-axis) by
         self.pass_depth and self.body is repeated.
         """
+        self.svg_file_name = svg_file_name
 	# generate gcode for 'path' and 'image' svg tags
         self.append_curves(curves)
 
         # write path objects
-        with open(file_name, 'w') as file:
-            file.write(self.compile(passes=passes))
+        gcode = self.compile(passes=passes)
+        if gcode:
+            with open(file_name, 'w') as file:
+                file.write(gcode)
+            logger.info(f"Generated {file_name}")
+        else:
+            logger.warn(f'No cutting data found, skipping "{file_name}"')
 
+        image_gcode_filename = file_name.rsplit('.',1)[0] + "_images." + file_name.rsplit('.',1)[1]
         if len(self.gcode) == 0:
-            if self.settings['showimage']:
-                warnings.warn("Cannot show images (SVG has none).")
+            logger.warn(f'No image found, skipping "{image_gcode_filename}"')
         else:
             images_gcode = self.compile_images()
             # write image objects
-            with open(file_name.rsplit('.',1)[0] + "_images." + file_name.rsplit('.',1)[1], 'w') as file:
+            with open(image_gcode_filename, 'w') as file:
                 file.write(images_gcode)
+            logger.info(f"Generated {image_gcode_filename}")
 
     def append_line_chain(self, line_chain: LineSegmentChain):
         """
@@ -164,7 +179,7 @@ class Compiler:
         """
 
         if line_chain.chain_size() == 0:
-            warnings.warn("Attempted to parse empty LineChain")
+            logger.warn("Attempted to parse empty LineChain")
             return
 
         code = []
@@ -220,10 +235,18 @@ class Compiler:
         #       a match possible.
 
         # strip either 'file:...' or 'data:...' prefix (MIME part) from field 'xlink:href'
+        is_link = not base64_string.startswith('data')
         fileordata = re.sub("(^file://|^data:[a-z0-9;/]+,)","", base64_string, flags=re.I)
 
-        if os.path.isfile(fileordata):
-            img_file = fileordata
+        # if os.path.isfile(fileordata):
+        if is_link:
+            if fileordata.startswith(os.path.curdir):
+                img_file = os.path.join(os.path.dirname(self.svg_file_name), fileordata)
+            else:
+                img_file = fileordata
+            if not os.path.isfile(img_file):
+                logger.error("Unable to find image : %s", img_file)
+                return
 
         elif self.isBase64(fileordata):
             # convert to right form
@@ -233,9 +256,8 @@ class Compiler:
             img_file = BytesIO(imgdata)
         else:
             # Neither file nor data
-            print(f'xlink:href="{base64_string[:30]}"')
-            print("Image data error: neither file nor data!")
-            return None
+            logger.error("Unable to read image data: %s", base64_string[:30])
+            return
 
         return Image.open(img_file)
 
@@ -428,7 +450,7 @@ class Compiler:
 
     def check_axis_maximum_travel(self):
         return self.settings["x_axis_maximum_travel"] is not None and self.settings["y_axis_maximum_travel"] is not None
-        # warnings.warn("Please define machine cutting area, set parameter: 'x_axis_maximum_travel' and 'y_axis_maximum_travel'")
+        # logger.warn("Please define machine cutting area, set parameter: 'x_axis_maximum_travel' and 'y_axis_maximum_travel'")
 
     def check_bounds(self):
         """

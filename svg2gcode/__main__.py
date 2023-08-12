@@ -26,7 +26,7 @@ def svg2gcode(args) -> int:
                         'showimage':args.showimage, 'x_axis_maximum_travel':args.xmaxtravel,'y_axis_maximum_travel':args.ymaxtravel, 'image_noise':args.noise,
                         'laser_mode':"constant" if args.constantburn else "dynamic" })
         # emit gcode for svg
-        gcode_compiler.compile_to_file(args.gcode, parse_file(args.svg, delta_origin=args.origin), passes=1)
+        gcode_compiler.compile_to_file(args.gcode, args.svg, parse_file(args.svg, delta_origin=args.origin), passes=1)
 
     except Exception as error:
         print(error)
