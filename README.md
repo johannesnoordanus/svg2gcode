@@ -71,6 +71,8 @@ options:
                         (default), 0 is no G0 moves
   --noise <default:0>   reduces image noise by not emitting pixels with power lower or equal than this setting
   --constantburn        use constant burn mode M3 (a bit more dangerous!), instead of dynamic burn mode M4
+  --origin Xdelta Ydelta
+                        translate origin by (Xdelta,Ydelta) (default not set)
   --xmaxtravel <default:300>
                         machine x-axis lengh in mm
   --ymaxtravel <default:400>
