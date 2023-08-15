@@ -16,7 +16,7 @@ from svg2gcode import __version__
 
 def svg2gcode(args) -> int:
     """
-    image2gcode: convert svg to gcode
+    svg2gcode: convert svg to gcode
     """
     try:
         # Instantiate a compiler, specifying the interface type and the speed at which the tool should move (for both image drawings and laser cutting).
@@ -26,7 +26,7 @@ def svg2gcode(args) -> int:
                         'showimage':args.showimage, 'x_axis_maximum_travel':args.xmaxtravel,'y_axis_maximum_travel':args.ymaxtravel, 'image_noise':args.noise,
                         'laser_mode':"constant" if args.constantburn else "dynamic" })
         # emit gcode for svg
-        gcode_compiler.compile_to_file(args.gcode, parse_file(args.svg, delta_origin=args.origin), passes=1)
+        gcode_compiler.compile_to_file(args.gcode, parse_file(args.svg, delta_origin=args.origin, scale_factor=args.scale), passes=1)
 
     except Exception as error:
         print(error)
@@ -71,6 +71,8 @@ def main() -> int:
     parser.add_argument('--constantburn', action='store_true', default=False, help='use constant burn mode M3 (a bit more dangerous!), instead of dynamic burn mode M4')
     parser.add_argument('--origin', default=None, nargs=2, metavar=('Xdelta', 'Ydelta'),
         type=float, help="translate origin by (Xdelta,Ydelta) (default not set)")
+    parser.add_argument('--scale', default=None, nargs=2, metavar=('Xfactor', 'Yfactor'),
+        type=float, help="scale svg with (Xfactor,Yfactor) (default not set)")
     parser.add_argument('--xmaxtravel', default=xmaxtravel_default, metavar="<default:" +str(xmaxtravel_default)+ ">",
         type=int, help="machine x-axis lengh in mm")
     parser.add_argument('--ymaxtravel', default=ymaxtravel_default, metavar="<default:" +str(ymaxtravel_default)+ ">",
