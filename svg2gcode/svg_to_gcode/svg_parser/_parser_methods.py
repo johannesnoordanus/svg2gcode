@@ -19,7 +19,7 @@ def _has_style(element: ElementTree.Element, key: str, value: str) -> bool:
     return element.get(key) == value or (element.get("style") and f"{key}:{value}" in element.get("style"))
 
 
-def add_viewbox_transformation(transformation: Transformation, transform_origin, vwbox, origin):
+def add_viewbox_transformation(transformation: Transformation, transform_origin, vwbox, origin, scale):
     """
     Transform SVG coordinate system to a math-cartesion coordinate system and correct its origin.
     When viewBox is missing the 'height' value of the viewport is used.
@@ -59,6 +59,10 @@ def add_viewbox_transformation(transformation: Transformation, transform_origin,
         # (transformations are in reverse order see 'Note' below)
         if origin is not None and ((vwbox["x"] + origin[0]) or (vwbox["y"]  + origin[1])):
             up_transformation.add_translation(vwbox["x"] + origin[0],vwbox["y"] + origin[1])
+
+        # scale it
+        if scale is not None:
+            up_transformation.add_scale(scale[0],scale[1])
 
         # Note: If A and B are the matrices of two linear transformations, then the effect of first applying A and then B
         # to a column vector x is given by B(Ax) == (BA)x
@@ -109,7 +113,7 @@ def get_viewBox(root: ElementTree.Element) -> {}:
 
 
 def parse_root(root: ElementTree.Element, transform_origin=True, viewbox=None, draw_hidden=False,
-               visible_root=True, root_transformation=None, origin=None) -> List[Curve]:
+               visible_root=True, root_transformation=None, origin=None, scale=None) -> List[Curve]:
 
     """
     Recursively parse an etree root's children into geometric curves.
@@ -166,7 +170,7 @@ def parse_root(root: ElementTree.Element, transform_origin=True, viewbox=None, d
         if draw_hidden or visible:
             if element.tag == "{%s}path" % NAMESPACES["svg"]:
                 path = Path(element.attrib['d'],
-                               add_viewbox_transformation(transformation, transform_origin, viewbox, origin))
+                               add_viewbox_transformation(transformation, transform_origin, viewbox, origin, scale))
                 curves.extend(path.curves)
             else:
                 if element.tag == "{%s}image" % NAMESPACES["svg"]:
@@ -174,17 +178,17 @@ def parse_root(root: ElementTree.Element, transform_origin=True, viewbox=None, d
 
                     # instantiate curve (image)
                     ri = RasterImage(element.attrib, element.attrib["{%s}href" % NAMESPACES["xlink"]],
-                                add_viewbox_transformation(transformation, transform_origin, viewbox, origin))
+                                add_viewbox_transformation(transformation, transform_origin, viewbox, origin, scale))
                     curves.append(ri)
 
         # Continue the recursion
-        curves.extend(parse_root(element, transform_origin, viewbox, draw_hidden, visible, transformation, origin))
+        curves.extend(parse_root(element, transform_origin, viewbox, draw_hidden, visible, transformation, origin, scale))
 
     # ToDo implement shapes class
     return curves
 
 
-def parse_string(svg_string: str, transform_origin=True, viewbox=None, draw_hidden=False, delta_origin=None) -> List[Curve]:
+def parse_string(svg_string: str, transform_origin=True, viewbox=None, draw_hidden=False, delta_origin=None, scale_factor=None) -> List[Curve]:
     """
     Recursively parse an svg string into geometric curves. (Wrapper for parse_root)
 
@@ -199,10 +203,10 @@ def parse_string(svg_string: str, transform_origin=True, viewbox=None, draw_hidd
     :return: A list of geometric curves describing the svg. Use the Compiler sub-module to compile them to gcode.
     """
     root = ElementTree.fromstring(svg_string)
-    return parse_root(root, transform_origin, viewbox, draw_hidden, origin=delta_origin)
+    return parse_root(root, transform_origin, viewbox, draw_hidden, origin=delta_origin, scale=scale_factor)
 
 
-def parse_file(file_path: str, transform_origin=True, viewbox=None, draw_hidden=False, delta_origin=None) -> List[Curve]:
+def parse_file(file_path: str, transform_origin=True, viewbox=None, draw_hidden=False, delta_origin=None, scale_factor=None) -> List[Curve]:
     """
     Recursively parse an svg file into geometric curves. (Wrapper for parse_root)
 
@@ -217,4 +221,4 @@ def parse_file(file_path: str, transform_origin=True, viewbox=None, draw_hidden=
     :return: A list of geometric curves describing the svg. Use the Compiler sub-module to compile them to gcode.
     """
     root = ElementTree.parse(file_path).getroot()
-    return parse_root(root, transform_origin, viewbox, draw_hidden, origin=delta_origin)
+    return parse_root(root, transform_origin, viewbox, draw_hidden, origin=delta_origin, scale=scale_factor)
