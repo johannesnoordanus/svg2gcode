@@ -10,7 +10,11 @@ This makes combined cutting and engraving as easy as orientating the (wood) slab
 Controlling laser power, pixel size and other settings can be done via commandline parameters (see below) or within Inkscape using the XMLeditor.
 Image attributes ```gcode_pixelsize```, ```gcode_maxpower```, ```gcode_speed```, ```gcode_noise``` and ```gcode_speedmoves``` can be set per object (they must be created: use **+**). Note that this overrides explicit or default commandline settings.
 
-Version 2.0.0 has important new speed optimizations. Engravings run significantly faster and skip from one image zone to the other at maximum speed. See options ```--speedmoves``` and ```--noise``` for example.
+You have full control over the coordinate system of the result gcode file via option *--origin* and *--scale*.
+Note that gcode file headers contain compile information like the boundingbox and boundingbox center coordinates.
+Tip: boundingbox center can be used to set the origin (via option *--origin*) at the center.
+
+Version 2.0.0 and above have important new speed optimizations. Engravings run significantly faster and skip from one image zone to the other at maximum speed. See options ```--speedmoves``` and ```--noise``` for example.
 
 To summarize:
 
@@ -42,9 +46,9 @@ See notes below.
 $ svg2gcode --help
 usage: svg2gcode [-h] [--showimage] [--pixelsize <default:0.1>] [--imagespeed <default:800>]
                  [--cuttingspeed <default:1000>] [--imagepower <default:300>] [--cuttingpower <default:850>]
-                 [--rapidmove <default:10>] [--noise <default:0>] [--constantburn] [--xmaxtravel <default:300>]
-                 [--ymaxtravel <default:400>] [--fan] [-V]
-                 svg gcode
+                 [--rapidmove <default:10>] [--noise <default:0>] [--constantburn] [--origin Xdelta Ydelta]
+                 [--scale Xfactor Yfactor] [--splitfile] [--xmaxtravel <default:300>] [--ymaxtravel <default:400>]
+                 [--fan] [-V] svg gcode
 
 Convert svg to gcode for GRBL v1.1 compatible diode laser engravers.
 
@@ -73,6 +77,9 @@ options:
   --constantburn        use constant burn mode M3 (a bit more dangerous!), instead of dynamic burn mode M4
   --origin Xdelta Ydelta
                         translate origin by (Xdelta,Ydelta) (default not set)
+  --scale Xfactor Yfactor
+                        scale svg with (Xfactor,Yfactor) (default not set)
+  --splitfile           split gcode output of SVG path and image objects
   --xmaxtravel <default:300>
                         machine x-axis lengh in mm
   --ymaxtravel <default:400>
@@ -84,7 +91,7 @@ options:
 ### Notes:
   - example command to create two types of gcode file, one containing the drawings of the .svg, the other containing the images:      
 ```
-  > svg2gcode ambachtmanlogo.svg logo.gc
+  > svg2gcode --splitfile ambachtmanlogo.svg logo.gc
   > ..
   > ls *.gc 
   > logo.gc             # all drawings
