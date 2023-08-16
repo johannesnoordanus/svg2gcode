@@ -118,7 +118,7 @@ class Gcode(Interface):
 
         # Don't do anything if the move is redundant.
         if command == '':
-            if Gcode.warn_nr > 2:
+            if Gcode.warn_nr > 10:
                 warnings.warn("linear_move command to the same position.")
             Gcode.warn_nr += 1
             return ''
