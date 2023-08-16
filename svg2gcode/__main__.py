@@ -24,7 +24,7 @@ def svg2gcode(args) -> int:
         gcode_compiler = Compiler(interfaces.Gcode, params={'laser_power':args.cuttingpower,'movement_speed':args.cuttingspeed, 'pixel_size':args.pixelsize,
                         'maximum_image_laser_power':args.imagepower, 'image_movement_speed':args.imagespeed, 'fan':args.fan,'rapid_move':args.rapidmove,
                         'showimage':args.showimage, 'x_axis_maximum_travel':args.xmaxtravel,'y_axis_maximum_travel':args.ymaxtravel, 'image_noise':args.noise,
-                        'laser_mode':"constant" if args.constantburn else "dynamic" })
+                        'laser_mode':"constant" if args.constantburn else "dynamic", 'splitfile':args.splitfile})
         # emit gcode for svg
         gcode_compiler.compile_to_file(args.gcode, parse_file(args.svg, delta_origin=args.origin, scale_factor=args.scale), passes=1)
 
@@ -73,6 +73,7 @@ def main() -> int:
         type=float, help="translate origin by (Xdelta,Ydelta) (default not set)")
     parser.add_argument('--scale', default=None, nargs=2, metavar=('Xfactor', 'Yfactor'),
         type=float, help="scale svg with (Xfactor,Yfactor) (default not set)")
+    parser.add_argument('--splitfile', action='store_true', default=False, help='split gcode output of SVG path and image objects' )
     parser.add_argument('--xmaxtravel', default=xmaxtravel_default, metavar="<default:" +str(xmaxtravel_default)+ ">",
         type=int, help="machine x-axis lengh in mm")
     parser.add_argument('--ymaxtravel', default=ymaxtravel_default, metavar="<default:" +str(ymaxtravel_default)+ ">",
