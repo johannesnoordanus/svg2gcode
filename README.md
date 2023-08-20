@@ -44,11 +44,11 @@ also, program *image2gcode* has similar capabilities but handles raster images f
 See notes below.
 ```
 $ svg2gcode --help
-usage: svg2gcode [-h] [--showimage] [--pixelsize <default:0.1>] [--imagespeed <default:800>]
-                 [--cuttingspeed <default:1000>] [--imagepower <default:300>] [--cuttingpower <default:850>]
-                 [--rapidmove <default:10>] [--noise <default:0>] [--constantburn] [--origin Xdelta Ydelta]
-                 [--scale Xfactor Yfactor] [--splitfile] [--xmaxtravel <default:300>] [--ymaxtravel <default:400>]
-                 [--fan] [-V] svg gcode
+usage: svg2gcode [-h] [--showimage] [--pixelsize <default:0.1>] [--imagespeed <default:800>] [--cuttingspeed <default:1000>]
+                 [--imagepower <default:300>] [--cuttingpower <default:850>] [--passes <default:1>] [--pass_depth <default:0>]
+                 [--rapidmove <default:10>] [--noise <default:0>] [--constantburn] [--origin Xdelta Ydelta] [--scale Xfactor Yfactor]
+                 [--rotate <default:0>] [--splitfile] [--xmaxtravel <default:300>] [--ymaxtravel <default:400>] [--fan] [-V]
+                 svg gcode
 
 Convert svg to gcode for GRBL v1.1 compatible diode laser engravers.
 
@@ -66,19 +66,21 @@ options:
   --cuttingspeed <default:1000>
                         cutting speed in mm/min
   --imagepower <default:300>
-                        maximum laser power while drawing an image (as a rule of thumb set to 1/3 of the
-                        machine maximum for a 5W laser)
+                        maximum laser power while drawing an image (as a rule of thumb set to 1/3 of the machine maximum for a 5W laser)
   --cuttingpower <default:850>
                         sets laser power of line drawings/cutting
+  --passes <default:1>  Number of passes (iterations) for line drawings, only active when pass_depth is set
+  --pass_depth <default:0>
+                        cutting depth in mm for one pass, only active for passes > 1
   --rapidmove <default:10>
-                        generate G0 moves between shapes, for images: G0 moves when skipping more than 10mm
-                        (default), 0 is no G0 moves
+                        generate G0 moves between shapes, for images: G0 moves when skipping more than 10mm (default), 0 is no G0 moves
   --noise <default:0>   reduces image noise by not emitting pixels with power lower or equal than this setting
   --constantburn        use constant burn mode M3 (a bit more dangerous!), instead of dynamic burn mode M4
   --origin Xdelta Ydelta
                         translate origin by (Xdelta,Ydelta) (default not set)
   --scale Xfactor Yfactor
                         scale svg with (Xfactor,Yfactor) (default not set)
+  --rotate <default:0>  number of degrees to rotate
   --splitfile           split gcode output of SVG path and image objects
   --xmaxtravel <default:300>
                         machine x-axis lengh in mm
@@ -101,5 +103,3 @@ options:
  - also, image objects should **not** be converted to a ```path```
  - images must be linked or embedded using base64.
  - images can be in several formats (my tests included *.png* and  *.jpg* image files)
-
-
