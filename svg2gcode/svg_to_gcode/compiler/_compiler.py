@@ -261,7 +261,7 @@ class Compiler:
     def convert_image(self, image:str, img_attrib: dict[str, Any]):
 
         # get svg image attributes info or default
-        pixelsize = img_attrib['gcode_pixelsize'] if 'gcode_pixelsize' in img_attrib else 0.1
+        pixelsize = img_attrib['gcode_pixelsize'] if 'gcode_pixelsize' in img_attrib else self.settings["pixel_size"]
 
         # convert image from base64 string
         img = self.decode_base64(image)
@@ -275,12 +275,12 @@ class Compiler:
             img_background = Image.new(mode = "RGBA", size = img.size, color = (255,255,255))
             img = Image.alpha_composite(img_background, img)
 
-            # convert image to black&white (without alpha) and new size #reminder: 'img = img.convert("LA")'
-            img = img.resize((int(float(img_attrib['width']) * 1/float(pixelsize)),
-                            int(float(img_attrib['height']) * 1/float(pixelsize))), Image.Resampling.LANCZOS).convert("L")
-
             if self.settings['showimage']:
                 img.show()
+
+            # convert image to black&white (without alpha) and new size #reminder: 'img = img.convert("LA")'
+            img = img.resize((int(float(img_attrib['width'])/float(pixelsize)),
+                            int(float(img_attrib['height'])/float(pixelsize))), Image.Resampling.LANCZOS).convert("L")
 
             # convert to nparray for fast handling
             return np.array(img)
