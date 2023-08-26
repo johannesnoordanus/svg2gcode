@@ -17,7 +17,7 @@ from svg2gcode.svg_to_gcode import DEFAULT_SETTING
 from svg2gcode.svg_to_gcode import TOLERANCES, SETTING, check_setting
 
 from svg2gcode import __version__
-
+from datetime import datetime
 from PIL import Image
 
 class Compiler:
@@ -45,6 +45,8 @@ class Compiler:
         if params is None or not check_setting(params):
             raise ValueError(f"Please set at least 'maximum_laser_power' and 'movement_speed' from {SETTING}")
 
+        # save params
+        self.params = params
 	# get default settings and update
         self.settings = copy.deepcopy(DEFAULT_SETTING)
         for key in params.keys():
@@ -74,8 +76,12 @@ class Compiler:
 
     def gcode_file_header(self):
 	# add generator info and boundingbox for this code
-        gcode = [f"; svg2gcode {__version__}", f"; GRBL 1.1, unit={self.settings['unit']}, {self.settings['distance_mode']} coordinates"]
 
+        gcode = [ f";    svg2gcode {__version__} ({str(datetime.now()).split('.')[0]})",
+                  f";    arguments: {self.params}",
+                  f";    GRBL 1.1, unit={self.settings['unit']}, {self.settings['distance_mode']} coordinates\n" ]
+
+        print("gcode_file_header")
         if self._boundingbox:
             center = self.bbox_center()
             gcode += [ f"; Boundingbox: (X{self._boundingbox[0].x:.{0 if self._boundingbox[0].x.is_integer() else self.precision}f},"
@@ -173,8 +179,13 @@ class Compiler:
                     file.write(self.gcode_file_header() + header +  self.compile_images() + '\n' + self.interface.program_end() + '\n')
             else:
                 # emit images objects in same file
-                with open(file_name, 'a+') as file:
-                    file.write(self.compile_images() + '\n' + self.interface.program_end() + '\n')
+                open_mode = 'w' if len(self.body) == 0 else 'a+'
+                print("open_mode: ", open_mode)
+                with open(file_name, open_mode) as file:
+                    print("len:", len(self.body))
+                    print("len:", (self.gcode_file_header() if len(self.body) == 0 else ""))
+                    file.write((self.gcode_file_header() if len(self.body) == 0 else "") + '\n' +  self.compile_images() + '\n' + self.interface.program_end() + '\n')
+                    print("after")
         else:
             warnings.warn("Cannot emit images, SVG has none.")
 
@@ -200,7 +211,7 @@ class Compiler:
                         self.interface.set_movement_speed(self.settings["movement_speed"]),
                         self.interface.set_laser_mode(self.settings["laser_mode"]), self.interface.set_laser_power_value(self.settings["laser_power"])]
 
-                self._boundingbox = [copy.deepcopy(start), copy.deepcopy(start)] if self._boundingbox is None else self._boundingbox
+                self.boundingbox(start)
             else:
                 # move to the next line_chain: set laser mode, set laser power to 0 (cutting is off),
                 # set movement speed, (no rapid) move to start of chain, set laser to power
@@ -278,7 +289,21 @@ class Compiler:
             if self.settings['showimage']:
                 img.show()
 
-            # convert image to black&white (without alpha) and new size #reminder: 'img = img.convert("LA")'
+            # Note that the image resize action below is based on the following:
+            # - the image data (linked file or embedded) has a certain source resolution (number of pixels WidthxHeight)
+            # - image attributes 'width' and 'height' are in user units
+            # - user units are default (Inkscape, others?) set to be mm (1 user unit is 1 mm)
+            # - make sure this is the case (Inkscape: check the document settings and look at the 'scaling' parameter)
+            # - if this is the case, we have images attributes 'width' and 'height' in mm
+            # - so, for a given pixelsize, we need a 'width'/pixelsize x 'height'/pixelsize resolution to get to the correct
+            #   width and height in mm after 'width' steps (same for height in the other direction)
+            #   (note that the image conversion algorithm takes these steps)
+            # - note that the source resolution does not seem to be taken into account and (so) does not matter.
+            #   generally that is the case when the result of the calculation above results in downsampling of the source image
+            #   (make it lower resolution), if the calculation results in upsampling of the source image (make it higher resolution)
+            #   it does make a difference because the resized image can be blocky
+
+            # convert image to black&white (without alpha) and new size)'
             img = img.resize((int(float(img_attrib['width'])/float(pixelsize)),
                             int(float(img_attrib['height'])/float(pixelsize))), Image.Resampling.LANCZOS).convert("L")
 
@@ -463,6 +488,8 @@ class Compiler:
             self._boundingbox[0].y = XY.y if XY.y < self._boundingbox[0].y else self._boundingbox[0].y
             self._boundingbox[1].x = XY.x if XY.x > self._boundingbox[1].x else self._boundingbox[1].x
             self._boundingbox[1].y = XY.y if XY.y > self._boundingbox[1].y else self._boundingbox[1].y
+        else:
+            self._boundingbox = [copy.deepcopy(XY), copy.deepcopy(XY)]
 
     def check_axis_maximum_travel(self):
         return self.settings["x_axis_maximum_travel"] is not None and self.settings["y_axis_maximum_travel"] is not None
