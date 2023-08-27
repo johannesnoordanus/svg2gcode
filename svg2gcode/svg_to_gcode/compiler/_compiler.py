@@ -77,11 +77,14 @@ class Compiler:
     def gcode_file_header(self):
 	# add generator info and boundingbox for this code
 
+        params = ''
+        for k,v in self.params.items():
+            params += f"{k}: {v}, "
+
         gcode = [ f";    svg2gcode {__version__} ({str(datetime.now()).split('.')[0]})",
-                  f";    arguments: {self.params}",
+                  f";    arguments: {params}",
                   f";    GRBL 1.1, unit={self.settings['unit']}, {self.settings['distance_mode']} coordinates\n" ]
 
-        print("gcode_file_header")
         if self._boundingbox:
             center = self.bbox_center()
             gcode += [ f"; Boundingbox: (X{self._boundingbox[0].x:.{0 if self._boundingbox[0].x.is_integer() else self.precision}f},"
@@ -180,12 +183,8 @@ class Compiler:
             else:
                 # emit images objects in same file
                 open_mode = 'w' if len(self.body) == 0 else 'a+'
-                print("open_mode: ", open_mode)
                 with open(file_name, open_mode) as file:
-                    print("len:", len(self.body))
-                    print("len:", (self.gcode_file_header() if len(self.body) == 0 else ""))
                     file.write((self.gcode_file_header() if len(self.body) == 0 else "") + '\n' +  self.compile_images() + '\n' + self.interface.program_end() + '\n')
-                    print("after")
         else:
             warnings.warn("Cannot emit images, SVG has none.")
 
@@ -286,9 +285,6 @@ class Compiler:
             img_background = Image.new(mode = "RGBA", size = img.size, color = (255,255,255))
             img = Image.alpha_composite(img_background, img)
 
-            if self.settings['showimage']:
-                img.show()
-
             # Note that the image resize action below is based on the following:
             # - the image data (linked file or embedded) has a certain source resolution (number of pixels WidthxHeight)
             # - image attributes 'width' and 'height' are in user units
@@ -306,6 +302,9 @@ class Compiler:
             # convert image to black&white (without alpha) and new size)'
             img = img.resize((int(float(img_attrib['width'])/float(pixelsize)),
                             int(float(img_attrib['height'])/float(pixelsize))), Image.Resampling.LANCZOS).convert("L")
+
+            if self.settings['showimage']:
+                img.show()
 
             # convert to nparray for fast handling
             return np.array(img)
