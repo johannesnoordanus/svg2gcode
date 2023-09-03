@@ -1,6 +1,6 @@
 import os
 import re
-import warnings
+import logging
 import math
 import copy
 
@@ -20,6 +20,10 @@ from svg2gcode import __version__
 from datetime import datetime
 from PIL import Image
 
+logging.basicConfig(format="[%(levelname)s] %(message)s (%(name)s:%(lineno)s)")
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
 class Compiler:
     """
     The Compiler class handles the process of drawing geometric objects using interface commands and assembling the
@@ -34,8 +38,9 @@ class Compiler:
         :param custom_header: A list of commands to be executed before all generated commands.
         :param custom_footer: A list of commands to be executed after all generated commands.
                               Default [laser_off, program_end]
-	:param settings: dictionary to specify "unit", "pass_depth", "dwell_time", "movement_speed", etc.
+	      :param settings: dictionary to specify "unit", "pass_depth", "dwell_time", "movement_speed", etc.
         """
+        self.svg_file_name = None
         self._boundingbox = None
         self.interface = interface_class()
 
@@ -47,7 +52,7 @@ class Compiler:
 
         # save params
         self.params = params
-	# get default settings and update
+	      # get default settings and update
         self.settings = copy.deepcopy(DEFAULT_SETTING)
         for key in params.keys():
             self.settings[key] = params[key]
@@ -75,7 +80,7 @@ class Compiler:
                  abs(self._boundingbox[1].y - self._boundingbox[0].y)/2.0 + self._boundingbox[0].y )
 
     def gcode_file_header(self):
-	# add generator info and boundingbox for this code
+	      # add generator info and boundingbox for this code
 
         params = ''
         for k,v in self.params.items():
@@ -96,11 +101,11 @@ class Compiler:
 
             if not self.check_bounds():
                 if self.settings["distance_mode"] == "absolute" and self.check_axis_maximum_travel():
-                    # warnings.warn("Cut is not within machine bounds.")
+                    logger.warn("Cut is not within machine bounds.")
                     gcode += ["; WARNING: Cut is not within machine bounds of "
                               f"X[0,{self.settings['x_axis_maximum_travel']}], Y[0,{self.settings['y_axis_maximum_travel']}]"]
                 elif not self.check_axis_maximum_travel():
-                    # warnings.warn("Please define machine cutting area, set parameter: 'x_axis_maximum_travel' and 'y_axis_maximum_travel'")
+                    # logger.warn("Please define machine cutting area, set parameter: 'x_axis_maximum_travel' and 'y_axis_maximum_travel'")
                     gcode += ["; WARNING: Please define machine cutting area, set parameter: 'x_axis_maximum_travel' and 'y_axis_maximum_travel'"]
                 else:
                     gcode += [f"; WARNING: distance mode is not absolute: {self.settings['distance_mode']}"]
@@ -116,29 +121,28 @@ class Compiler:
         self.pass_depth and self.body is repeated.
         :return returns the assembled code. self.header + [self.body, -self.pass_depth] * passes + self.footer
         """
+        if len(self.body) == 0:
+            logger.debug("Compile with an empty body (no curves).")
+            return ''
+          
+        gcode = []
+        for i in range(passes):
+            gcode += [f"; pass #{i+1}"]
+            gcode.extend(self.body)
 
-        if len(self.body) > 0:
-            gcode = []
-            for i in range(passes):
-                gcode += [f"; pass #{i+1}"]
-                gcode.extend(self.body)
+            if i < (passes - 1) and self.settings["pass_depth"] > 0:
+                # If it isn't the last pass, turn off the laser and move down
+                gcode.append(self.interface.laser_off())
+                gcode.append(self.interface.set_relative_coordinates())
+                gcode.append(self.interface.linear_move(z=-self.settings["pass_depth"]))
+                gcode.append(self.interface.set_distance_mode(self.settings["distance_mode"]))
 
-                if i < (passes - 1) and self.settings["pass_depth"] > 0:
-                    # If it isn't the last pass, turn off the laser and move down
-                    gcode.append(self.interface.laser_off())
-                    gcode.append(self.interface.set_relative_coordinates())
-                    gcode.append(self.interface.linear_move(z=-self.settings["pass_depth"]))
-                    gcode.append(self.interface.set_distance_mode(self.settings["distance_mode"]))
+        gcode += [self.interface.laser_off()]
 
-            gcode += [self.interface.laser_off()]
+        # remove all ""
+        gcode = filter(lambda command: len(command) > 0, gcode)
 
-            # remove all ""
-            gcode = filter(lambda command: len(command) > 0, gcode)
-
-            return '\n'.join(gcode)
-
-        warnings.warn("Compile with an empty body (no curves).")
-        return ""
+        return '\n'.join(gcode)
 
     def compile_images(self):
 
@@ -153,16 +157,19 @@ class Compiler:
 
         return '\n'.join(header_gc + self.gcode + footer_gc)
 
-    def compile_to_file(self, file_name: str, curves: list[Curve], passes=1):
+    def compile_to_file(self, file_name: str, svg_file_name: str, curves: list[Curve], passes=1):
         """
         A wrapper for the self.compile method. Assembles the code in the header, body and footer, saving it to a file.
 
         :param file_name: the path to save the file.
+        :param svg_file_name: the path to the original svg image.
         :param curves: SVG curves approximated by line segments.
         :param passes: the number of passes that should be made. Every pass the machine moves_down (z-axis) by
         self.pass_depth and self.body is repeated.
         """
-	# generate gcode for 'path' and 'image' svg tags (calculate bbox)
+
+        self.svg_file_name = svg_file_name
+	      # generate gcode for 'path' and 'image' svg tags (calculate bbox)
         self.append_curves(curves)
 
         header = '\n'.join(self.header) + '\n'
@@ -172,21 +179,27 @@ class Compiler:
             with open(file_name, 'w') as file:
                 emit_program_end = self.interface.program_end() if (self.settings["splitfile"] or len(self.gcode) == 0) else ""
                 file.write(self.gcode_file_header() + header + self.compile(passes=passes) + '\n' + emit_program_end)
+                logger.info(f"Generated {file_name}")
         else:
-            warnings.warn("Cannot emit curves, SVG has none.")
+            logger.warn(f'No path (curve) data found, skipping "{file_name}"')
 
         if len(self.gcode) > 0:
+        
+        image_file_name = file_name.rsplit('.',1)[0] + "_images." + file_name.rsplit('.',1)[1]
+        if len(self.gcode) == 0:
+            logger.warn(f'No image found, skipping "{image_file_name}"')
+        else:    
             if self.settings["splitfile"]:
-                # emit image objects to <filename>_images.<gcext>
-                with open(file_name.rsplit('.',1)[0] + "_images." + file_name.rsplit('.',1)[1], 'w') as file:
+                # emit image objects to <filename>_images.<gcext> 
+                with open(image_file_name, 'w') as file:
                     file.write(self.gcode_file_header() + header +  self.compile_images() + '\n' + self.interface.program_end() + '\n')
+                    logger.info(f"Generated {image_gcode_filename}")
             else:
                 # emit images objects in same file
                 open_mode = 'w' if len(self.body) == 0 else 'a+'
                 with open(file_name, open_mode) as file:
                     file.write((self.gcode_file_header() if len(self.body) == 0 else "") + '\n' +  self.compile_images() + '\n' + self.interface.program_end() + '\n')
-        else:
-            warnings.warn("Cannot emit images, SVG has none.")
+                    logger.info(f"Generated {file_name}")
 
     def append_line_chain(self, line_chain: LineSegmentChain):
         """
@@ -195,13 +208,13 @@ class Compiler:
         """
 
         if line_chain.chain_size() == 0:
-            warnings.warn("Attempted to parse empty LineChain")
+            logger.warn("Attempted to parse empty LineChain")
             return
 
         code = []
         start = line_chain.get(0).start
 
-	# Move to the next line_chain when the next line segment doesn't connect to the end of the previous one.
+	      # Move to the next line_chain when the next line segment doesn't connect to the end of the previous one.
         if self.interface.position is None or abs(self.interface.position - start) > TOLERANCES["operation"]:
             if self.interface.position is None or self.settings["rapid_move"]:
                 # move to the next line_chain: set laser off, rapid move to start of chain,
@@ -248,10 +261,18 @@ class Compiler:
         #       a match possible.
 
         # strip either 'file:...' or 'data:...' prefix (MIME part) from field 'xlink:href'
+        is_link = not base64_string.startswith('data')
         fileordata = re.sub("(^file://|^data:[a-z0-9;/]+,)","", base64_string, flags=re.I)
 
-        if os.path.isfile(fileordata):
-            img_file = fileordata
+        # if os.path.isfile(fileordata):
+        if is_link:
+            if fileordata.startswith(os.path.curdir):
+                img_file = os.path.join(os.path.dirname(self.svg_file_name), fileordata)
+            else:
+                img_file = fileordata
+            if not os.path.isfile(img_file):
+                logger.error("Unable to find image : %s", img_file)
+                return
 
         elif self.isBase64(fileordata):
             # convert to right form
@@ -261,9 +282,8 @@ class Compiler:
             img_file = BytesIO(imgdata)
         else:
             # Neither file nor data
-            print(f'xlink:href="{base64_string[:30]}"')
-            print("Image data error: neither file nor data!")
-            return None
+            logger.error("Unable to read image data: %s", base64_string[:30])
+            return
 
         return Image.open(img_file)
 
@@ -492,7 +512,7 @@ class Compiler:
 
     def check_axis_maximum_travel(self):
         return self.settings["x_axis_maximum_travel"] is not None and self.settings["y_axis_maximum_travel"] is not None
-        # warnings.warn("Please define machine cutting area, set parameter: 'x_axis_maximum_travel' and 'y_axis_maximum_travel'")
+        # logger.warn("Please define machine cutting area, set parameter: 'x_axis_maximum_travel' and 'y_axis_maximum_travel'")
 
     def check_bounds(self):
         """
