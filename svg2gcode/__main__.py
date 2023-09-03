@@ -36,8 +36,8 @@ def svg2gcode(args) -> int:
     # emit gcode for svg
     if args.selfcenter:
         print("pass 1")
-    compiler.compile_to_file(args.gcode, parse_file(args.svg, delta_origin=args.origin, scale_factor=args.scale, rotate_deg=args.rotate), passes=args.passes)
-
+    compiler.compile_to_file(args.gcode, args.svg, parse_file(args.svg, delta_origin=args.origin, scale_factor=args.scale, rotate_deg=args.rotate), passes=args.passes)
+    
     if args.selfcenter:
         # remove output files(s)
         filename = args.gcode
@@ -58,7 +58,7 @@ def svg2gcode(args) -> int:
         # now run with origin set to center
         # emit gcode for svg
         print("pass 2")
-        compiler.compile_to_file(args.gcode, parse_file(args.svg, delta_origin=center, scale_factor=args.scale, rotate_deg=args.rotate), passes=args.passes)
+        compiler.compile_to_file(args.gcode, args.svg, parse_file(args.svg, delta_origin=center, scale_factor=args.scale, rotate_deg=args.rotate), passes=args.passes)
 
     return 0
 
