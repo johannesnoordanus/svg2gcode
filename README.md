@@ -90,6 +90,17 @@ options:
   --fan                 set machine fan on
   -V, --version         show version number and exit
 ```
+
+You can also store those settings in `~/.config/svg2gcode.toml`, eg:
+
+```
+xmaxtravel= 400
+ymaxtravel= 400
+imagespeed = 6000
+```
+
+It can be used with any parameter which takes a value, and alows to persist your laser settings.
+
 ### Notes:
   - example command to create two types of gcode file, one containing the drawings of the .svg, the other containing the images:      
 ```
