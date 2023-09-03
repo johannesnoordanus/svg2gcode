@@ -17,7 +17,7 @@ from svg2gcode.svg_to_gcode import DEFAULT_SETTING
 from svg2gcode.svg_to_gcode import TOLERANCES, SETTING, check_setting
 
 from svg2gcode import __version__
-
+from datetime import datetime
 from PIL import Image
 
 logging.basicConfig(format="[%(levelname)s] %(message)s (%(name)s:%(lineno)s)")
@@ -38,7 +38,7 @@ class Compiler:
         :param custom_header: A list of commands to be executed before all generated commands.
         :param custom_footer: A list of commands to be executed after all generated commands.
                               Default [laser_off, program_end]
-	:param settings: dictionary to specify "unit", "pass_depth", "dwell_time", "movement_speed", etc.
+	      :param settings: dictionary to specify "unit", "pass_depth", "dwell_time", "movement_speed", etc.
         """
         self.svg_file_name = None
         self._boundingbox = None
@@ -50,7 +50,9 @@ class Compiler:
         if params is None or not check_setting(params):
             raise ValueError(f"Please set at least 'maximum_laser_power' and 'movement_speed' from {SETTING}")
 
-	# get default settings and update
+        # save params
+        self.params = params
+	      # get default settings and update
         self.settings = copy.deepcopy(DEFAULT_SETTING)
         for key in params.keys():
             self.settings[key] = params[key]
@@ -73,30 +75,29 @@ class Compiler:
         # image gcode
         self.gcode: list[str] = []
 
+    def bbox_center(self):
+        return ( abs(self._boundingbox[1].x - self._boundingbox[0].x)/2.0 + self._boundingbox[0].x,
+                 abs(self._boundingbox[1].y - self._boundingbox[0].y)/2.0 + self._boundingbox[0].y )
 
+    def gcode_file_header(self):
+	      # add generator info and boundingbox for this code
 
-    def compile(self, passes=1):
+        params = ''
+        for k,v in self.params.items():
+            params += f"{k}: {v}, "
 
-        """
-        Assembles the code in the header, body and footer.
-
-        :param passes: the number of passes that should be made. Every pass the machine moves_down (z-axis) by
-        self.pass_depth and self.body is repeated.
-        :return returns the assembled code. self.header + [self.body, -self.pass_depth] * passes + self.footer
-        """
-
-        if len(self.body) == 0:
-            logger.debug("Compile with an empty body (no curves).")
-            return ''
-
-	# add generator info and boundingbox for this code
-        gcode = [f"; svg2gcode {__version__}", f"; GRBL 1.1, unit={self.settings['unit']}, {self.settings['distance_mode']} coordinates"]
+        gcode = [ f";    svg2gcode {__version__} ({str(datetime.now()).split('.')[0]})",
+                  f";    arguments: {params}",
+                  f";    GRBL 1.1, unit={self.settings['unit']}, {self.settings['distance_mode']} coordinates\n" ]
 
         if self._boundingbox:
+            center = self.bbox_center()
             gcode += [ f"; Boundingbox: (X{self._boundingbox[0].x:.{0 if self._boundingbox[0].x.is_integer() else self.precision}f},"
                        f"Y{self._boundingbox[0].y:.{0 if self._boundingbox[0].y.is_integer() else self.precision}f}):"
                        f"(X{self._boundingbox[1].x:.{0 if self._boundingbox[1].x.is_integer() else self.precision}f},"
-                       f"Y{self._boundingbox[1].y:.{0 if self._boundingbox[1].y.is_integer() else self.precision}f})"]
+                       f"Y{self._boundingbox[1].y:.{0 if self._boundingbox[1].y.is_integer() else self.precision}f})",
+                       f"; Bbox center: (X{center[0]:.{0 if center[0].is_integer() else self.precision}f},"
+                       f"Y{center[1]:.{0 if center[1].is_integer() else self.precision}f})", ]
 
             if not self.check_bounds():
                 if self.settings["distance_mode"] == "absolute" and self.check_axis_maximum_travel():
@@ -109,7 +110,22 @@ class Compiler:
                 else:
                     gcode += [f"; WARNING: distance mode is not absolute: {self.settings['distance_mode']}"]
 
-        gcode.extend(self.header)
+        return '\n'.join(gcode) + '\n'
+
+    def compile(self, passes=1):
+
+        """
+        Assembles the code in the header, body and footer.
+
+        :param passes: the number of passes that should be made. Every pass the machine moves_down (z-axis) by
+        self.pass_depth and self.body is repeated.
+        :return returns the assembled code. self.header + [self.body, -self.pass_depth] * passes + self.footer
+        """
+        if len(self.body) == 0:
+            logger.debug("Compile with an empty body (no curves).")
+            return ''
+          
+        gcode = []
         for i in range(passes):
             gcode += [f"; pass #{i+1}"]
             gcode.extend(self.body)
@@ -121,8 +137,9 @@ class Compiler:
                 gcode.append(self.interface.linear_move(z=-self.settings["pass_depth"]))
                 gcode.append(self.interface.set_distance_mode(self.settings["distance_mode"]))
 
-        gcode.extend(self.footer)
+        gcode += [self.interface.laser_off()]
 
+        # remove all ""
         gcode = filter(lambda command: len(command) > 0, gcode)
 
         return '\n'.join(gcode)
@@ -133,9 +150,10 @@ class Compiler:
         Assembles the code in the header, body and footer.
         """
 
+        # laser off, fan on, M3 or M4 burn mode
         header_gc = ["M5","M8", 'M3' if self.settings["laser_mode"] == "constant" else 'M4']
-        # laser off, fan off, program stop
-        footer_gc = ["M5","M9","M2"]
+        # laser off, fan off
+        footer_gc = ["M5","M9"]
 
         return '\n'.join(header_gc + self.gcode + footer_gc)
 
@@ -149,28 +167,39 @@ class Compiler:
         :param passes: the number of passes that should be made. Every pass the machine moves_down (z-axis) by
         self.pass_depth and self.body is repeated.
         """
+
         self.svg_file_name = svg_file_name
-	# generate gcode for 'path' and 'image' svg tags
+	      # generate gcode for 'path' and 'image' svg tags (calculate bbox)
         self.append_curves(curves)
 
-        # write path objects
-        gcode = self.compile(passes=passes)
-        if gcode:
-            with open(file_name, 'w') as file:
-                file.write(gcode)
-            logger.info(f"Generated {file_name}")
-        else:
-            logger.warn(f'No cutting data found, skipping "{file_name}"')
+        header = '\n'.join(self.header) + '\n'
 
-        image_gcode_filename = file_name.rsplit('.',1)[0] + "_images." + file_name.rsplit('.',1)[1]
-        if len(self.gcode) == 0:
-            logger.warn(f'No image found, skipping "{image_gcode_filename}"')
+        if len(self.body) > 0:
+            # write path objects
+            with open(file_name, 'w') as file:
+                emit_program_end = self.interface.program_end() if (self.settings["splitfile"] or len(self.gcode) == 0) else ""
+                file.write(self.gcode_file_header() + header + self.compile(passes=passes) + '\n' + emit_program_end)
+                logger.info(f"Generated {file_name}")
         else:
-            images_gcode = self.compile_images()
-            # write image objects
-            with open(image_gcode_filename, 'w') as file:
-                file.write(images_gcode)
-            logger.info(f"Generated {image_gcode_filename}")
+            logger.warn(f'No path (curve) data found, skipping "{file_name}"')
+
+        if len(self.gcode) > 0:
+        
+        image_file_name = file_name.rsplit('.',1)[0] + "_images." + file_name.rsplit('.',1)[1]
+        if len(self.gcode) == 0:
+            logger.warn(f'No image found, skipping "{image_file_name}"')
+        else:    
+            if self.settings["splitfile"]:
+                # emit image objects to <filename>_images.<gcext> 
+                with open(image_file_name, 'w') as file:
+                    file.write(self.gcode_file_header() + header +  self.compile_images() + '\n' + self.interface.program_end() + '\n')
+                    logger.info(f"Generated {image_gcode_filename}")
+            else:
+                # emit images objects in same file
+                open_mode = 'w' if len(self.body) == 0 else 'a+'
+                with open(file_name, open_mode) as file:
+                    file.write((self.gcode_file_header() if len(self.body) == 0 else "") + '\n' +  self.compile_images() + '\n' + self.interface.program_end() + '\n')
+                    logger.info(f"Generated {file_name}")
 
     def append_line_chain(self, line_chain: LineSegmentChain):
         """
@@ -185,7 +214,7 @@ class Compiler:
         code = []
         start = line_chain.get(0).start
 
-	# Move to the next line_chain when the next line segment doesn't connect to the end of the previous one.
+	      # Move to the next line_chain when the next line segment doesn't connect to the end of the previous one.
         if self.interface.position is None or abs(self.interface.position - start) > TOLERANCES["operation"]:
             if self.interface.position is None or self.settings["rapid_move"]:
                 # move to the next line_chain: set laser off, rapid move to start of chain,
@@ -194,7 +223,7 @@ class Compiler:
                         self.interface.set_movement_speed(self.settings["movement_speed"]),
                         self.interface.set_laser_mode(self.settings["laser_mode"]), self.interface.set_laser_power_value(self.settings["laser_power"])]
 
-                self._boundingbox = [copy.deepcopy(start), copy.deepcopy(start)] if self._boundingbox is None else self._boundingbox
+                self.boundingbox(start)
             else:
                 # move to the next line_chain: set laser mode, set laser power to 0 (cutting is off),
                 # set movement speed, (no rapid) move to start of chain, set laser to power
@@ -207,11 +236,8 @@ class Compiler:
 
         for line in line_chain:
             code.append(self.interface.linear_move(line.end.x, line.end.y))
-            if self._boundingbox is not None:
-                self._boundingbox[0].x = line.end.x if line.end.x < self._boundingbox[0].x else self._boundingbox[0].x
-                self._boundingbox[0].y = line.end.y if line.end.y < self._boundingbox[0].y else self._boundingbox[0].y
-                self._boundingbox[1].x = line.end.x if line.end.x > self._boundingbox[1].x else self._boundingbox[1].x
-                self._boundingbox[1].y = line.end.y if line.end.y > self._boundingbox[1].y else self._boundingbox[1].y
+            # update bounding box
+            self.boundingbox(line.end)
 
         self.body.extend(code)
 
@@ -265,7 +291,7 @@ class Compiler:
     def convert_image(self, image:str, img_attrib: dict[str, Any]):
 
         # get svg image attributes info or default
-        pixelsize = img_attrib['gcode_pixelsize'] if 'gcode_pixelsize' in img_attrib else 0.1
+        pixelsize = img_attrib['gcode_pixelsize'] if 'gcode_pixelsize' in img_attrib else self.settings["pixel_size"]
 
         # convert image from base64 string
         img = self.decode_base64(image)
@@ -279,9 +305,23 @@ class Compiler:
             img_background = Image.new(mode = "RGBA", size = img.size, color = (255,255,255))
             img = Image.alpha_composite(img_background, img)
 
-            # convert image to black&white (without alpha) and new size #reminder: 'img = img.convert("LA")'
-            img = img.resize((int(float(img_attrib['width']) * 1/float(pixelsize)),
-                            int(float(img_attrib['height']) * 1/float(pixelsize))), Image.Resampling.LANCZOS).convert("L")
+            # Note that the image resize action below is based on the following:
+            # - the image data (linked file or embedded) has a certain source resolution (number of pixels WidthxHeight)
+            # - image attributes 'width' and 'height' are in user units
+            # - user units are default (Inkscape, others?) set to be mm (1 user unit is 1 mm)
+            # - make sure this is the case (Inkscape: check the document settings and look at the 'scaling' parameter)
+            # - if this is the case, we have images attributes 'width' and 'height' in mm
+            # - so, for a given pixelsize, we need a 'width'/pixelsize x 'height'/pixelsize resolution to get to the correct
+            #   width and height in mm after 'width' steps (same for height in the other direction)
+            #   (note that the image conversion algorithm takes these steps)
+            # - note that the source resolution does not seem to be taken into account and (so) does not matter.
+            #   generally that is the case when the result of the calculation above results in downsampling of the source image
+            #   (make it lower resolution), if the calculation results in upsampling of the source image (make it higher resolution)
+            #   it does make a difference because the resized image can be blocky
+
+            # convert image to black&white (without alpha) and new size)'
+            img = img.resize((int(float(img_attrib['width'])/float(pixelsize)),
+                            int(float(img_attrib['height'])/float(pixelsize))), Image.Resampling.LANCZOS).convert("L")
 
             if self.settings['showimage']:
                 img.show()
@@ -313,7 +353,7 @@ class Compiler:
 
         # set header for this image
         self.gcode += [f"; image name: {img_attrib['id']}, pixelsize: {pixelsize}, speed: {speed},\n"
-                       f';             maxpower: {maxpower}, speedmoves {speedmoves}, noise level {noise}\n;\n']
+                       f';             maxpower: {maxpower}, speedmoves {speedmoves}, noise level {noise}']
 
         # set X/Y-axis precision to number of digits after the decimal separator
         XY_prec = len(str(pixelsize).split('.')[1])
@@ -326,8 +366,12 @@ class Compiler:
         if transformation is not None:
             XYt = transformation.apply_affine_transformation(Vector(X, Y))
             self.gcode += [f"G0X{round(XYt[0],XY_prec)}Y{round(XYt[1],XY_prec)}"]
+            # update bounding box
+            self.boundingbox(XYt)
         else:
             self.gcode += [f"G0X{X}Y{Y}"]
+            # update bounding box
+            self.boundingbox(Vector(X, Y))
 
         # set write speed and G1 move mode
         # (note that this stays into effect until another G code is executed,
@@ -396,13 +440,19 @@ class Compiler:
                             else:
                                 # normal speed
                                 code = f"X{round(XYlastloc[0],XY_prec)}Y{round(XYlastloc[1],XY_prec)}S0\n"
+                            # update bounding box
+                            self.boundingbox(XYlastloc)
 
                         # emit point
                         if transformation is not None:
                             XYt = transformation.apply_affine_transformation(Vector(X, Y))
                             code += f"X{round(XYt[0],XY_prec)}Y{round(XYt[1],XY_prec)}S{prev_pow}"
+                            # update bounding box
+                            self.boundingbox(XYt)
                         else:
                             code += f"X{X}S{prev_pow}"
+                            # update bounding box
+                            self.boundingbox(Vector(X, Y))
                         self.gcode += [code]
 
                         # head at this location
@@ -447,6 +497,18 @@ class Compiler:
                 approximation = LineSegmentChain.line_segment_approximation(curve)
                 line_chain.extend(approximation)
                 self.append_line_chain(line_chain)
+
+    def boundingbox(self, XY: Vector):
+        """
+        boundingbox: update bounding box
+        """
+        if self._boundingbox is not None:
+            self._boundingbox[0].x = XY.x if XY.x < self._boundingbox[0].x else self._boundingbox[0].x
+            self._boundingbox[0].y = XY.y if XY.y < self._boundingbox[0].y else self._boundingbox[0].y
+            self._boundingbox[1].x = XY.x if XY.x > self._boundingbox[1].x else self._boundingbox[1].x
+            self._boundingbox[1].y = XY.y if XY.y > self._boundingbox[1].y else self._boundingbox[1].y
+        else:
+            self._boundingbox = [copy.deepcopy(XY), copy.deepcopy(XY)]
 
     def check_axis_maximum_travel(self):
         return self.settings["x_axis_maximum_travel"] is not None and self.settings["y_axis_maximum_travel"] is not None
