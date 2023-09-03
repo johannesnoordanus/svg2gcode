@@ -10,7 +10,11 @@ This makes combined cutting and engraving as easy as orientating the (wood) slab
 Controlling laser power, pixel size and other settings can be done via commandline parameters (see below) or within Inkscape using the XMLeditor.
 Image attributes ```gcode_pixelsize```, ```gcode_maxpower```, ```gcode_speed```, ```gcode_noise``` and ```gcode_speedmoves``` can be set per object (they must be created: use **+**). Note that this overrides explicit or default commandline settings.
 
-Version 2.0.0 has important new speed optimizations. Engravings run significantly faster and skip from one image zone to the other at maximum speed. See options ```--speedmoves``` and ```--noise``` for example.
+You have full control over the coordinate system of the result gcode file via option *--origin* and *--scale*.
+Option *--selfcenter* can be used to set the origin at the center of the image.
+Note that gcode file headers contain compile information like the boundingbox and boundingbox center coordinates.
+
+Version 2.0.0 and above have important new speed optimizations. Engravings run significantly faster and skip from one image zone to the other at maximum speed. See options ```--speedmoves``` and ```--noise``` for example.
 
 To summarize:
 
@@ -40,10 +44,10 @@ also, program *image2gcode* has similar capabilities but handles raster images f
 See notes below.
 ```
 $ svg2gcode --help
-usage: svg2gcode [-h] [--showimage] [--pixelsize <default:0.1>] [--imagespeed <default:800>]
-                 [--cuttingspeed <default:1000>] [--imagepower <default:300>] [--cuttingpower <default:850>]
-                 [--rapidmove <default:10>] [--noise <default:0>] [--constantburn] [--xmaxtravel <default:300>]
-                 [--ymaxtravel <default:400>] [--fan] [-V]
+usage: svg2gcode [-h] [--showimage] [--selfcenter] [--pixelsize <default:0.1>] [--imagespeed <default:800>] [--cuttingspeed <default:1000>]
+                 [--imagepower <default:300>] [--cuttingpower <default:850>] [--passes <default:1>] [--pass_depth <default:0>] [--rapidmove <default:10>]
+                 [--noise <default:0>] [--constantburn] [--origin Xdelta Ydelta] [--scale Xfactor Yfactor] [--rotate <default:0>] [--splitfile]
+                 [--xmaxtravel <default:300>] [--ymaxtravel <default:400>] [--fan] [-V]
                  svg gcode
 
 Convert svg to gcode for GRBL v1.1 compatible diode laser engravers.
@@ -55,6 +59,7 @@ positional arguments:
 options:
   -h, --help            show this help message and exit
   --showimage           show b&w converted image
+  --selfcenter          self center the gcode (--origin cannot be used at the same time)
   --pixelsize <default:0.1>
                         pixel size in mm (XY-axis): each image pixel is drawn this size
   --imagespeed <default:800>
@@ -62,24 +67,28 @@ options:
   --cuttingspeed <default:1000>
                         cutting speed in mm/min
   --imagepower <default:300>
-                        maximum laser power while drawing an image (as a rule of thumb set to 1/3 of the
-                        machine maximum for a 5W laser)
+                        maximum laser power while drawing an image (as a rule of thumb set to 1/3 of the machine maximum for a 5W laser)
   --cuttingpower <default:850>
                         sets laser power of line drawings/cutting
+  --passes <default:1>  Number of passes (iterations) for line drawings, only active when pass_depth is set
+  --pass_depth <default:0>
+                        cutting depth in mm for one pass, only active for passes > 1
   --rapidmove <default:10>
-                        generate G0 moves between shapes, for images: G0 moves when skipping more than 10mm
-                        (default), 0 is no G0 moves
+                        generate G0 moves between shapes, for images: G0 moves when skipping more than 10mm (default), 0 is no G0 moves
   --noise <default:0>   reduces image noise by not emitting pixels with power lower or equal than this setting
   --constantburn        use constant burn mode M3 (a bit more dangerous!), instead of dynamic burn mode M4
   --origin Xdelta Ydelta
-                        translate origin by (Xdelta,Ydelta) (default not set)
+                        translate origin by (Xdelta,Ydelta) (default not set, option --selfcenter cannot be used at the same time)
+  --scale Xfactor Yfactor
+                        scale svg with (Xfactor,Yfactor) (default not set)
+  --rotate <default:0>  number of degrees to rotate
+  --splitfile           split gcode output of SVG path and image objects
   --xmaxtravel <default:300>
                         machine x-axis lengh in mm
   --ymaxtravel <default:400>
                         machine y-axis lengh in mm
   --fan                 set machine fan on
   -V, --version         show version number and exit
-
 ```
 
 You can also store those settings in `~/.config/svg2gcode.toml`, eg:
@@ -95,7 +104,7 @@ It can be used with any parameter which takes a value, and alows to persist your
 ### Notes:
   - example command to create two types of gcode file, one containing the drawings of the .svg, the other containing the images:      
 ```
-  > svg2gcode ambachtmanlogo.svg logo.gc
+  > svg2gcode --splitfile ambachtmanlogo.svg logo.gc
   > ..
   > ls *.gc 
   > logo.gc             # all drawings
@@ -105,5 +114,4 @@ It can be used with any parameter which takes a value, and alows to persist your
  - also, image objects should **not** be converted to a ```path```
  - images must be linked or embedded using base64.
  - images can be in several formats (my tests included *.png* and  *.jpg* image files)
-
-
+ - SVG source documents must be in unit 'mm' (and set to 1 'user unit' is 1 mm) which is the default for Inkscape (check document settings and look at the 'scaling' parameter)
