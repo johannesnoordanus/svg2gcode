@@ -36,7 +36,13 @@ class Gcode(Interface):
         # G94 (set Feed rate to 'unit'/min)
         # note that G0 mode hase a machine defined movement speed ('Feed Rate') and is the default motion mode upon power up and reset.
         # note that some or all gcodes above might be machine defaults, this is to make sure they are
-        return "; rapid movement,XY plane,cutter compensation off,coordinate system 1,move 'unit'/min\nG0 G17 G40 G54 G94"
+        return ("\n; Machine settings:\n"
+                ";    rapid movement,\n"
+                ";    XY plane,\n"
+                ";    cutter compensation off,\n"
+                ";    coordinate system 1,\n"
+                ";    move 'unit'/min\n"
+                "G0 G17 G40 G54 G94\n")
 
     def set_movement_speed(self, speed):
         self._next_speed = speed
