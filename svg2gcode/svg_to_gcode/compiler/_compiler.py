@@ -84,10 +84,10 @@ class Compiler:
 
         params = ''
         for k,v in self.params.items():
-            params += f"{k}: {v}, "
+            params += f";      {k}: {v},\n"
 
         gcode = [ f";    svg2gcode {__version__} ({str(datetime.now()).split('.')[0]})",
-                  f";    arguments: {params}",
+                  f";    arguments: \n{params}",
                   f";    GRBL 1.1, unit={self.settings['unit']}, {self.settings['distance_mode']} coordinates\n" ]
 
         if self._boundingbox:
@@ -351,9 +351,13 @@ class Compiler:
         noise = img_attrib['gcode_noise'] if 'gcode_noise' in img_attrib else self.settings["image_noise"]
         speedmoves = img_attrib['gcode_speedmoves'] if 'gcode_speedmoves' in img_attrib else self.settings["rapid_move"]
 
-        # set header for this image
-        self.gcode += [f"; image name: {img_attrib['id']}, pixelsize: {pixelsize}, speed: {speed},\n"
-                       f';             maxpower: {maxpower}, speedmoves {speedmoves}, noise level {noise}']
+	# set header for this image
+        self.gcode += [f"; image name: {img_attrib['id']},\n"
+                       f";       pixelsize: {pixelsize},\n"
+                       f";       speed: {speed},\n"
+                       f";       maxpower: {maxpower},\n"
+                       f";       speedmoves: {speedmoves},\n"
+                       f";       noise level: {noise}\n"]
 
         # set X/Y-axis precision to number of digits after the decimal separator
         XY_prec = len(str(pixelsize).split('.')[1])
