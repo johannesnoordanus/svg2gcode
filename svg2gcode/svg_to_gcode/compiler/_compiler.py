@@ -20,7 +20,8 @@ from svg2gcode import __version__
 from datetime import datetime
 from PIL import Image
 
-logging.basicConfig(format="[%(levelname)s] %(message)s (%(name)s:%(lineno)s)")
+#logging.basicConfig(format="[%(levelname)s] %(message)s (%(name)s:%(lineno)s)")
+logging.basicConfig(format="[%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
@@ -124,7 +125,7 @@ class Compiler:
         if len(self.body) == 0:
             logger.debug("Compile with an empty body (no curves).")
             return ''
-          
+
         gcode = []
         for i in range(passes):
             gcode += [f"; pass #{i+1}"]
@@ -183,23 +184,21 @@ class Compiler:
         else:
             logger.warn(f'No path (curve) data found, skipping "{file_name}"')
 
-        if len(self.gcode) > 0:
-        
         image_file_name = file_name.rsplit('.',1)[0] + "_images." + file_name.rsplit('.',1)[1]
         if len(self.gcode) == 0:
             logger.warn(f'No image found, skipping "{image_file_name}"')
-        else:    
+        else:
             if self.settings["splitfile"]:
-                # emit image objects to <filename>_images.<gcext> 
+                # emit image objects to <filename>_images.<gcext>
                 with open(image_file_name, 'w') as file:
                     file.write(self.gcode_file_header() + header +  self.compile_images() + '\n' + self.interface.program_end() + '\n')
-                    logger.info(f"Generated {image_gcode_filename}")
+                    logger.info(f"Generated {image_file_name}")
             else:
                 # emit images objects in same file
                 open_mode = 'w' if len(self.body) == 0 else 'a+'
                 with open(file_name, open_mode) as file:
                     file.write((self.gcode_file_header() if len(self.body) == 0 else "") + '\n' +  self.compile_images() + '\n' + self.interface.program_end() + '\n')
-                    logger.info(f"Generated {file_name}")
+                    logger.info(f"Added image(s) to {file_name}")
 
     def append_line_chain(self, line_chain: LineSegmentChain):
         """

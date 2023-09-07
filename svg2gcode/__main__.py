@@ -4,7 +4,14 @@ svg2gcode: convert an image to gcode.
 
 import os
 import sys
-import tomllib
+try:
+    import tomllib
+except ImportError:
+    try:
+        import toml
+    except ImportError:
+        print("Import error: either 'toml' must be installed (pip install toml) or python version must be 3.11 or higher!")
+        sys.exit(1)
 import argparse
 
 from svg2gcode.svg_to_gcode.svg_parser import parse_file
@@ -37,7 +44,7 @@ def svg2gcode(args) -> int:
     if args.selfcenter:
         print("pass 1")
     compiler.compile_to_file(args.gcode, args.svg, parse_file(args.svg, delta_origin=args.origin, scale_factor=args.scale, rotate_deg=args.rotate), passes=args.passes)
-    
+
     if args.selfcenter:
         # remove output files(s)
         filename = args.gcode
@@ -77,9 +84,9 @@ def main() -> int:
         "ymaxtravel_default": 400,
         "rapidmove_default": 10,
         "noise_default": 0,
-        "pass_depth_default" = 0,
-        "passes_default" = 1,
-        "rotate_default" = 0,
+        "pass_depth_default": 0,
+        "passes_default": 1,
+        "rotate_default": 0,
     }
 
     if os.path.exists(config_file):
@@ -117,7 +124,7 @@ def main() -> int:
         type=float, help="scale svg with (Xfactor,Yfactor) (default not set)")
     parser.add_argument('--rotate', default=cfg["rotate_default"], metavar="<default:" +str(cfg["rotate_default"])+ ">",
         type=int, help="number of degrees to rotate")
-    parser.add_argument('--splitfile', action='store_true', default=False, help='split gcode output of SVG path and image objects' )    
+    parser.add_argument('--splitfile', action='store_true', default=False, help='split gcode output of SVG path and image objects' )
     parser.add_argument('--xmaxtravel', default=cfg["xmaxtravel_default"], metavar="<default:" +str(cfg["xmaxtravel_default"])+ ">",
         type=int, help="machine x-axis lengh in mm")
     parser.add_argument('--ymaxtravel', default=cfg["ymaxtravel_default"], metavar="<default:" +str(cfg["ymaxtravel_default"])+ ">",
