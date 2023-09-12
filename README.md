@@ -43,12 +43,12 @@ also, program *image2gcode* has similar capabilities but handles raster images f
 ### Usage:
 See notes below.
 ```
-$ svg2gcode --help
-usage: svg2gcode [-h] [--showimage] [--selfcenter] [--pixelsize <default:0.1>] [--imagespeed <default:800>] [--cuttingspeed <default:1000>]
-                 [--imagepower <default:300>] [--cuttingpower <default:850>] [--passes <default:1>] [--pass_depth <default:0>] [--rapidmove <default:10>]
-                 [--noise <default:0>] [--constantburn] [--origin Xdelta Ydelta] [--scale Xfactor Yfactor] [--rotate <default:0>] [--splitfile]
-                 [--xmaxtravel <default:300>] [--ymaxtravel <default:400>] [--fan] [-V]
-                 svg gcode
+svg2gcode --help
+usage: runsvg2gcode [-h] [--showimage] [--selfcenter] [--pixelsize <default:0.1>] [--imagespeed <default:800>] [--cuttingspeed <default:1000>]
+                    [--imagepower <default:300>] [--poweroffset <default:0>] [--cuttingpower <default:850>] [--passes <default:1>] [--pass_depth <default:0>]
+                    [--rapidmove <default:10>] [--noise <default:0>] [--overscan <default:0>] [--showoverscan] [--constantburn] [--origin Xdelta Ydelta]
+                    [--scale Xfactor Yfactor] [--rotate <default:0>] [--splitfile] [--xmaxtravel <default:300>] [--ymaxtravel <default:400>] [--fan] [-V]
+                    svg gcode
 
 Convert svg to gcode for GRBL v1.1 compatible diode laser engravers.
 
@@ -68,6 +68,8 @@ options:
                         cutting speed in mm/min
   --imagepower <default:300>
                         maximum laser power while drawing an image (as a rule of thumb set to 1/3 of the machine maximum for a 5W laser)
+  --poweroffset <default:0>
+                        pixel intensity to laser power: shift power range [0-imagepower]
   --cuttingpower <default:850>
                         sets laser power of line drawings/cutting
   --passes <default:1>  Number of passes (iterations) for line drawings, only active when pass_depth is set
@@ -76,6 +78,9 @@ options:
   --rapidmove <default:10>
                         generate G0 moves between shapes, for images: G0 moves when skipping more than 10mm (default), 0 is no G0 moves
   --noise <default:0>   reduces image noise by not emitting pixels with power lower or equal than this setting
+  --overscan <default:0>
+                        overscan image lines to avoid incorrect power levels for pixels at left and right borders, number in pixels, default off
+  --showoverscan        show overscan pixels (note that this is visible and part of the gcode emitted!)
   --constantburn        use constant burn mode M3 (a bit more dangerous!), instead of dynamic burn mode M4
   --origin Xdelta Ydelta
                         translate origin by (Xdelta,Ydelta) (default not set, option --selfcenter cannot be used at the same time)

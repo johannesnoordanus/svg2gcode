@@ -23,8 +23,12 @@ SETTING 	= {
 				#			'minimum_laser_power' and 'maximum_laser_power' must be set for this to work
     "laser_mode",		# LASERMODE		set constant or dynamic laser power mode
     "maximum_image_laser_power",# positive integer      sets laser power (maximum) for image drawings (this is typically 1/3) of 'maximum_laser_power')
+    "image_poweroffset",        # positive integer      pixel intensity to laser power: shift power range [0-maxpower]
     "image_movement_speed",     # positive integer      sets movement speed when drawing an image (typically a lot less than the 'maximum_rate')
     "image_noise",              # positive integer      reduces image noise by not emitting pixels lower or equal this setting')
+    "image_overscan",           # positive integer      overscan image lines to avoid incorrect power levels for pixels at left and right borders,
+                                #                       number in pixels, default off
+    "image_showoverscan",       # boolean               show overscan via 'coloring'
     # Configuration
     "unit",			# UNITS			sets machine unit (milimeters, inches), this also defines the Feed (movement) parameter (mm/min or in/min)
     "distance_mode",		# DISTANCEMODE		sets machine distance mode ('absolute' from 0,0 or 'incremental' from current position)
@@ -55,8 +59,11 @@ DEFAULT_SETTING 	= {
     "laser_power": 		1000,		# default set to 1
     "laser_mode": 		"dynamic",	# default set to dynamic (M4 safest mode, laser is off when not moving)
     "maximum_image_laser_power":None,           # MANDATORY should be ("maximum_laser_power" - "minimum_laser_power" / 3 for a 5W laser)
+    "image_poweroffset":        0,              # default no laser power shift
     "image_movement_speed":     None,           # MANDATORY
     "image_noise":              0,              # default set to not reduces images noise')
+    "image_overscan":           0,              # default no overscan
+    "image_showoverscan":       False,          # default do not show overscan coloring
     # Configuration
     "unit": 			"mm",		# default set to milimeters
     "distance_mode": 		"absolute",	# default set to absolute
@@ -90,7 +97,8 @@ def check_setting(setting: dict[str,Any] =None) -> bool:
             raise ValueError(f"Unknown '{key}' value '{setting[key]}'. Please specify one of the following: {{True,False}}")
         if key in {"minimum_laser_power","maximum_laser_power","x_axis_maximum_rate","y_axis_maximum_rate", "movement_speed",
                    "x_axis_maximum_travel","y_axis_maximum_travel", "maximum_image_laser_power",
-                   "image_movement_speed","laser_power","rapid_move" } and (not isinstance(setting[key],int) or setting[key] < 0):
+                   "image_movement_speed","laser_power","rapid_move", "image_poweroffset", "image_overscan"} \
+                   and (not isinstance(setting[key],int) or setting[key] < 0):
             raise ValueError(f"'{key}' has type {type(setting[key])} and value {setting[key]}, but should be of type {type(1)} and have a value >= 0")
         # Toolparameters
         if key in {"pass_depth","dwell_time"}:
@@ -104,7 +112,7 @@ def check_setting(setting: dict[str,Any] =None) -> bool:
             raise ValueError(f"Unknown '{key}' value '{setting[key]}'. Please specify one of the following: {UNITS}")
         if key == "distance_mode" and setting[key] not in DISTANCEMODE:
             raise ValueError(f"Unknown '{key}' value '{setting[key]}'. Please specify one of the following: {DISTANCEMODE}")
-        if key in {"fan","showimage","splitfile"} and setting[key] not in {True,False}:
+        if key in {"fan","showimage","splitfile","image_showoverscan"} and setting[key] not in {True,False}:
             raise ValueError(f"Unknown '{key}' value '{setting[key]}'. Please specify one of the following: {{True,False}}")
         if key == "pixel_size" and setting[key] and (not isinstance(setting[key],(float)) or setting[key] <= 0):
             raise TypeError(f"'{key}' is of type '{type(setting[key])}' but should be of type {type(1.0)} and have a value > 0.0")

@@ -20,6 +20,9 @@ from svg2gcode import __version__
 from datetime import datetime
 from PIL import Image
 
+from image2gcode.boundingbox import Boundingbox
+from image2gcode.image2gcode import Image2gcode
+
 #logging.basicConfig(format="[%(levelname)s] %(message)s (%(name)s:%(lineno)s)")
 logging.basicConfig(format="[%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
@@ -39,10 +42,10 @@ class Compiler:
         :param custom_header: A list of commands to be executed before all generated commands.
         :param custom_footer: A list of commands to be executed after all generated commands.
                               Default [laser_off, program_end]
-	      :param settings: dictionary to specify "unit", "pass_depth", "dwell_time", "movement_speed", etc.
+        :param settings: dictionary to specify "unit", "pass_depth", "dwell_time", "movement_speed", etc.
         """
         self.svg_file_name = None
-        self._boundingbox = None
+        self.boundingbox = Boundingbox()
         self.interface = interface_class()
 
         # Round outputs to the same number of significant figures as the operational tolerance.
@@ -76,40 +79,41 @@ class Compiler:
         # image gcode
         self.gcode: list[str] = []
 
-    def bbox_center(self):
-        return ( abs(self._boundingbox[1].x - self._boundingbox[0].x)/2.0 + self._boundingbox[0].x,
-                 abs(self._boundingbox[1].y - self._boundingbox[0].y)/2.0 + self._boundingbox[0].y )
-
     def gcode_file_header(self):
-	      # add generator info and boundingbox for this code
 
+        gcode = []
+
+        if not self.check_bounds():
+            if self.settings["distance_mode"] == "absolute" and self.check_axis_maximum_travel():
+                logger.warn("Cut is not within machine bounds.")
+                gcode += ["; WARNING: Cut is not within machine bounds of "
+                          f"X[0,{self.settings['x_axis_maximum_travel']}], Y[0,{self.settings['y_axis_maximum_travel']}]\n",]
+            elif not self.check_axis_maximum_travel():
+                # logger.warn("Please define machine cutting area, set parameter: 'x_axis_maximum_travel' and 'y_axis_maximum_travel'")
+                gcode += ["; WARNING: Please define machine cutting area, set parameter: 'x_axis_maximum_travel' and 'y_axis_maximum_travel'\n",]
+            else:
+                gcode += [f"; WARNING: distance mode is not absolute: {self.settings['distance_mode']}\n",]
+
+	# add generator info and boundingbox for this code
+
+        # get program parameters
         params = ''
-        for k,v in self.params.items():
-            params += f";      {k}: {v},\n"
+        for k, v in self.params.items():
+            if params != '':
+                params += f",\n"
+            if hasattr(v, 'name'):
+                params += f";      {k}: {os.path.basename(v.name)}"
+            else:
+                params += f";      {k}: {v}"
 
-        gcode = [ f";    svg2gcode {__version__} ({str(datetime.now()).split('.')[0]})",
-                  f";    arguments: \n{params}",
-                  f";    GRBL 1.1, unit={self.settings['unit']}, {self.settings['distance_mode']} coordinates\n" ]
+        center = self.boundingbox.center()
+        gcode += [ f";    svg2gcode {__version__} ({str(datetime.now()).split('.')[0]})",
+                   f";    arguments: \n{params}",
+                   f";    {self.boundingbox}",
+                   f";    boundingbox center: (X{center[0]:.{0 if center[0].is_integer() else self.precision}f},"
+                   f"Y{center[1]:.{0 if center[1].is_integer() else self.precision}f})" ]
 
-        if self._boundingbox:
-            center = self.bbox_center()
-            gcode += [ f"; Boundingbox: (X{self._boundingbox[0].x:.{0 if self._boundingbox[0].x.is_integer() else self.precision}f},"
-                       f"Y{self._boundingbox[0].y:.{0 if self._boundingbox[0].y.is_integer() else self.precision}f}):"
-                       f"(X{self._boundingbox[1].x:.{0 if self._boundingbox[1].x.is_integer() else self.precision}f},"
-                       f"Y{self._boundingbox[1].y:.{0 if self._boundingbox[1].y.is_integer() else self.precision}f})",
-                       f"; Bbox center: (X{center[0]:.{0 if center[0].is_integer() else self.precision}f},"
-                       f"Y{center[1]:.{0 if center[1].is_integer() else self.precision}f})", ]
-
-            if not self.check_bounds():
-                if self.settings["distance_mode"] == "absolute" and self.check_axis_maximum_travel():
-                    logger.warn("Cut is not within machine bounds.")
-                    gcode += ["; WARNING: Cut is not within machine bounds of "
-                              f"X[0,{self.settings['x_axis_maximum_travel']}], Y[0,{self.settings['y_axis_maximum_travel']}]"]
-                elif not self.check_axis_maximum_travel():
-                    # logger.warn("Please define machine cutting area, set parameter: 'x_axis_maximum_travel' and 'y_axis_maximum_travel'")
-                    gcode += ["; WARNING: Please define machine cutting area, set parameter: 'x_axis_maximum_travel' and 'y_axis_maximum_travel'"]
-                else:
-                    gcode += [f"; WARNING: distance mode is not absolute: {self.settings['distance_mode']}"]
+        gcode += [ f";    GRBL 1.1, unit={self.settings['unit']}, {self.settings['distance_mode']} coordinates" ]
 
         return '\n'.join(gcode) + '\n'
 
@@ -168,9 +172,9 @@ class Compiler:
         :param passes: the number of passes that should be made. Every pass the machine moves_down (z-axis) by
         self.pass_depth and self.body is repeated.
         """
-
         self.svg_file_name = svg_file_name
-	      # generate gcode for 'path' and 'image' svg tags (calculate bbox)
+
+	# generate gcode for 'path' and 'image' svg tags (calculate bbox)
         self.append_curves(curves)
 
         header = '\n'.join(self.header) + '\n'
@@ -222,7 +226,7 @@ class Compiler:
                         self.interface.set_movement_speed(self.settings["movement_speed"]),
                         self.interface.set_laser_mode(self.settings["laser_mode"]), self.interface.set_laser_power_value(self.settings["laser_power"])]
 
-                self.boundingbox(start)
+                self.boundingbox.update(start)
             else:
                 # move to the next line_chain: set laser mode, set laser power to 0 (cutting is off),
                 # set movement speed, (no rapid) move to start of chain, set laser to power
@@ -236,7 +240,7 @@ class Compiler:
         for line in line_chain:
             code.append(self.interface.linear_move(line.end.x, line.end.y))
             # update bounding box
-            self.boundingbox(line.end)
+            self.boundingbox.update(line.end)
 
         self.body.extend(code)
 
@@ -332,7 +336,7 @@ class Compiler:
 
     def distance(self, A: (float,float),B: (float,float)):
         """
-        Does Pythagoras
+        Pythagoras
         """
         # |Ax - Bx|^2 + |Ay - By|^2 = C^2
         # distance = √C^2
@@ -340,143 +344,42 @@ class Compiler:
 
     def image2gcode(self, img_attrib: dict[str, Any], img=None, transformation = None):
 
-        invert_intensity = True
+        # create image conversion object
+        convert = Image2gcode(transformation = transformation.apply_affine_transformation if transformation is not None else None)
+
+        #
+        # set arguments
 
         # get svg image attribute/object info (set in Inkscape for example) when available
         # else set tool invocation values
-        pixelsize = img_attrib['gcode_pixelsize'] if 'gcode_pixelsize' in img_attrib else self.settings["pixel_size"]
-        maxpower = img_attrib['gcode_maxpower'] if 'gcode_maxpower' in img_attrib else self.settings["maximum_image_laser_power"]
-        speed = img_attrib['gcode_speed'] if 'gcode_speed' in img_attrib else self.settings["image_movement_speed"]
-        noise = img_attrib['gcode_noise'] if 'gcode_noise' in img_attrib else self.settings["image_noise"]
-        speedmoves = img_attrib['gcode_speedmoves'] if 'gcode_speedmoves' in img_attrib else self.settings["rapid_move"]
+        arguments = {}
+        arguments["pixelsize"] = img_attrib['gcode_pixelsize'] if 'gcode_pixelsize' in img_attrib else self.settings["pixel_size"]
+        arguments["maxpower"] = img_attrib['gcode_maxpower'] if 'gcode_maxpower' in img_attrib else self.settings["maximum_image_laser_power"]
+        arguments["poweroffset"] = img_attrib['gcode_poweroffset'] if 'gcode_poweroffset' in img_attrib else self.settings["image_poweroffset"]
+        arguments["speed"] = img_attrib['gcode_speed'] if 'gcode_speed' in img_attrib else self.settings["image_movement_speed"]
+        arguments["noise"] = img_attrib['gcode_noise'] if 'gcode_noise' in img_attrib else self.settings["image_noise"]
+        arguments["speedmoves"] = img_attrib['gcode_speedmoves'] if 'gcode_speedmoves' in img_attrib else self.settings["rapid_move"]
+        arguments["overscan"] = img_attrib['gcode_overscan'] if 'gcode_overscan' in img_attrib else self.settings["image_overscan"]
+        arguments["showoverscan"] = img_attrib['gcode_showoverscan'] if 'gcode_showoverscan' in img_attrib else self.settings["image_showoverscan"]
+        arguments["offset"] = (float(img_attrib['x']), float(img_attrib['y']))
+        arguments["name"] = img_attrib['id']
 
-	# set header for this image
-        self.gcode += [f"; image name: {img_attrib['id']},\n"
-                       f";       pixelsize: {pixelsize},\n"
-                       f";       speed: {speed},\n"
-                       f";       maxpower: {maxpower},\n"
-                       f";       speedmoves: {speedmoves},\n"
-                       f";       noise level: {noise}\n"]
+        # get image parameters
+        params = ''
+        for k, v in arguments.items():
+            if params != '':
+                params += f",\n"
+            params += f";      {k}: {v}"
 
-        # set X/Y-axis precision to number of digits after the decimal separator
-        XY_prec = len(str(pixelsize).split('.')[1])
+        self.gcode += [f"; image:\n{params}"]
 
-        # start position
-        X = round(float(img_attrib['x']), XY_prec)
-        Y = round(float(img_attrib['y']), XY_prec)
+        # get gcode for image
+        self.gcode += [convert.image2gcode(img, arguments)]
 
-        # go to start
-        if transformation is not None:
-            XYt = transformation.apply_affine_transformation(Vector(X, Y))
-            self.gcode += [f"G0X{round(XYt[0],XY_prec)}Y{round(XYt[1],XY_prec)}"]
-            # update bounding box
-            self.boundingbox(XYt)
-        else:
-            self.gcode += [f"G0X{X}Y{Y}"]
-            # update bounding box
-            self.boundingbox(Vector(X, Y))
-
-        # set write speed and G1 move mode
-        # (note that this stays into effect until another G code is executed,
-        # so we do not have to repeat this for all coordinates emitted below)
-        self.gcode += [f"G1F{speed}"]
-
-        # Print left to right, right to left (etc.)
-        # Optimized gcode:
-        # - draw pixels until change of power
-        # - emit X/Y coordinates only when they change
-        # - emit linear move 'G1' code only once
-        # - does not emit in between spaces
-        #
-        left2right = True
-
-        # current location of laser head
-        head = (X,Y)
-
-        # start print
-        for line in img:
-
-            if not left2right:
-                # reverse line when printing right to left
-                line = np.flip(line)
-
-            # add line terminator (makes this algorithm regular)
-            line = np.append(line,0)
-
-            # Note that (laser) drawing from a point to a point differs from setting a point (within an image):
-            #              0   1   2   3   4   5   6     <-- gcode drawing points
-            # one line:    |[0]|[1]|[2]|[3]|[4]|[5]|     <-- image pixels
-            #
-            # For example: drawing from X0 to X2 with value S10 corresponds to setting [0] = S10 and [1] = S10
-            # Note also that drawing form left to right differs subtly from the reverse
-
-            # draw this pixel line
-            for count, pixel in enumerate(line):
-                # power proportional to maximum laser power
-                laserpow = round((1.0 - float(pixel/255)) * maxpower) if invert_intensity else round(float(pixel/255) * maxpower)
-
-                if count == 0:
-                    # delay emit first pixel (so all same power pixels can be emitted in one sweep)
-                    prev_pow = laserpow
-                    # set last head loaction on start of the line
-                    lastloc = (X,Y)
-
-                # draw points until change of power
-                if laserpow != prev_pow or count == line.size-1:
-                    if prev_pow > noise:
-                        code = ""
-                        if lastloc:
-                            # head is not at correct location, go there
-
-                            # Apply affine transformation (if needed)
-                            # (Note that an affine transformation does not necessarily preserve angles between
-                            #  lines or distances between points!)
-                            XYlastloc = (lastloc[0], lastloc[1]) if transformation is None else \
-                                        transformation.apply_affine_transformation(Vector(lastloc[0], lastloc[1]))
-
-                            XYhead = (head[0], head[1]) if transformation is None else \
-                                     transformation.apply_affine_transformation(Vector(head[0], head[1]))
-
-                            if speedmoves and (self.distance(XYhead,XYlastloc) > speedmoves):
-                                # fast
-                                code = f"G0 X{round(XYlastloc[0],XY_prec)}Y{round(XYlastloc[1],XY_prec)}\nG1\n"
-                            else:
-                                # normal speed
-                                code = f"X{round(XYlastloc[0],XY_prec)}Y{round(XYlastloc[1],XY_prec)}S0\n"
-                            # update bounding box
-                            self.boundingbox(XYlastloc)
-
-                        # emit point
-                        if transformation is not None:
-                            XYt = transformation.apply_affine_transformation(Vector(X, Y))
-                            code += f"X{round(XYt[0],XY_prec)}Y{round(XYt[1],XY_prec)}S{prev_pow}"
-                            # update bounding box
-                            self.boundingbox(XYt)
-                        else:
-                            code += f"X{X}S{prev_pow}"
-                            # update bounding box
-                            self.boundingbox(Vector(X, Y))
-                        self.gcode += [code]
-
-                        # head at this location
-                        head = (X,Y)
-                        lastloc = None
-                    else:
-                        # didn't move head to location, save it
-                        lastloc = (X,Y)
-
-                    if count == line.size-1:
-                        continue
-                    prev_pow = laserpow # if laserpow != prev_pow
-
-                # next point
-                X = round(X + (pixelsize if left2right else -pixelsize), XY_prec)
-
-            # next scan line (defer head movement: lazy head)
-            Y = round(Y + pixelsize, XY_prec)
-
-            # change print direction
-            left2right = not left2right
+        # update bounding box info
+        bbox_image = convert.bbox.get()
+        self.boundingbox.update(bbox_image[0])
+        self.boundingbox.update(bbox_image[1])
 
     def append_curves(self, curves: list[Curve]):
         """
@@ -501,18 +404,6 @@ class Compiler:
                 line_chain.extend(approximation)
                 self.append_line_chain(line_chain)
 
-    def boundingbox(self, XY: Vector):
-        """
-        boundingbox: update bounding box
-        """
-        if self._boundingbox is not None:
-            self._boundingbox[0].x = XY.x if XY.x < self._boundingbox[0].x else self._boundingbox[0].x
-            self._boundingbox[0].y = XY.y if XY.y < self._boundingbox[0].y else self._boundingbox[0].y
-            self._boundingbox[1].x = XY.x if XY.x > self._boundingbox[1].x else self._boundingbox[1].x
-            self._boundingbox[1].y = XY.y if XY.y > self._boundingbox[1].y else self._boundingbox[1].y
-        else:
-            self._boundingbox = [copy.deepcopy(XY), copy.deepcopy(XY)]
-
     def check_axis_maximum_travel(self):
         return self.settings["x_axis_maximum_travel"] is not None and self.settings["y_axis_maximum_travel"] is not None
         # logger.warn("Please define machine cutting area, set parameter: 'x_axis_maximum_travel' and 'y_axis_maximum_travel'")
@@ -520,14 +411,18 @@ class Compiler:
     def check_bounds(self):
         """
         Check if line segments are within the machine cutting area. Note that machine coordinate mode must
-        be absolute and machine parameters 'x_axis_maximum_travel' and 'y_axis_maximum_travel' are set
+        be absolute and machine parameters 'x_axis_maximum_travel' and 'y_axis_maximum_travel' are set, also
+        bounding box must be in the positive quadrant.
         :return true when box is in machine area bounds, false otherwise
         """
 
         if self.settings["distance_mode"] == "absolute" and self.check_axis_maximum_travel():
             machine_max = Vector(self.settings["x_axis_maximum_travel"],self.settings["y_axis_maximum_travel"])
-            return (self._boundingbox[0].x >= 0 and self._boundingbox[0].y >=0
-                    and self._boundingbox[1].x * (25.4 if self.settings["unit"] == "inch" else 1) <= machine_max.x
-                    and self._boundingbox[1].y * (25.4 if self.settings["unit"] == "inch" else 1) <= machine_max.y)
+            bbox = self.boundingbox.get()
+            # bbox[0] == lowerleft, bbox[1] == uperright, bbox[0/1][0] == x, bbox[0/1][1] == y
+            #      lower left x and y >= 0 and upperright x and y <= resp. machine max x and y
+            return (bbox[0][0] >= 0 and bbox[0][1] >=0
+                    and bbox[1][0] * (25.4 if self.settings["unit"] == "inch" else 1) <= machine_max.x
+                    and bbox[1][1] * (25.4 if self.settings["unit"] == "inch" else 1) <= machine_max.y)
 
         return False

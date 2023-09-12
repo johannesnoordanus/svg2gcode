@@ -133,6 +133,8 @@ class Transformation:
         Apply the full affine transformation (linear + translation) to a vector. Generally used to transform points.
         Eg the center of an ellipse.
         """
+        # cast
+        vector = Vector(*vector)
         vector_4d = Matrix([[vector.x], [vector.y], [1], [1]])
         vector_4d = self.translation_matrix * vector_4d
 
@@ -153,4 +155,6 @@ class Transformation:
             [b, d]
         ])
 
+        # cast
+        vector = Vector(*vector)
         return linear_transformation * vector

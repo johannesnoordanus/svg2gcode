@@ -36,7 +36,8 @@ def svg2gcode(args) -> int:
         return Compiler(interfaces.Gcode, params={'laser_power':args.cuttingpower,'movement_speed':args.cuttingspeed, 'pixel_size':args.pixelsize,
                'maximum_image_laser_power':args.imagepower, 'image_movement_speed':args.imagespeed, 'fan':args.fan,'rapid_move':args.rapidmove,
                'showimage':args.showimage, 'x_axis_maximum_travel':args.xmaxtravel,'y_axis_maximum_travel':args.ymaxtravel, 'image_noise':args.noise,
-               'pass_depth':args.pass_depth, 'laser_mode':"constant" if args.constantburn else "dynamic", 'splitfile':args.splitfile})
+               'pass_depth':args.pass_depth, 'laser_mode':"constant" if args.constantburn else "dynamic", 'splitfile':args.splitfile,
+               'image_poweroffset':args.poweroffset, 'image_overscan':args.overscan, 'image_showoverscan':args.showoverscan})
 
     compiler = init_compiler(args)
 
@@ -79,11 +80,13 @@ def main() -> int:
         "imagespeed_default": 800,
         "cuttingspeed_default": 1000,
         "imagepower_default": 300,
+        "poweroffset_default": 0,
         "cuttingpower_default": 850,
         "xmaxtravel_default": 300,
         "ymaxtravel_default": 400,
         "rapidmove_default": 10,
         "noise_default": 0,
+        "overscan_default": 0,
         "pass_depth_default": 0,
         "passes_default": 1,
         "rotate_default": 0,
@@ -107,6 +110,8 @@ def main() -> int:
         type=int, help='cutting speed in mm/min')
     parser.add_argument('--imagepower', default=cfg["imagepower_default"], metavar="<default:" +str(cfg["imagepower_default"])+ ">",
         type=int, help="maximum laser power while drawing an image (as a rule of thumb set to 1/3 of the machine maximum for a 5W laser)")
+    parser.add_argument('--poweroffset', default=cfg["poweroffset_default"], metavar="<default:" +str(cfg["poweroffset_default"])+ ">",
+        type=int, help="pixel intensity to laser power: shift power range [0-imagepower]")
     parser.add_argument('--cuttingpower', default=cfg["cuttingpower_default"], metavar="<default:" +str(cfg["cuttingpower_default"])+ ">",
         type=int, help="sets laser power of line drawings/cutting")
     parser.add_argument('--passes', default=cfg["passes_default"], metavar="<default:" +str(cfg["passes_default"])+ ">",
@@ -117,6 +122,9 @@ def main() -> int:
         type=int, help='generate G0 moves between shapes, for images: G0 moves when skipping more than 10mm (default), 0 is no G0 moves' )
     parser.add_argument('--noise', default=cfg["noise_default"], metavar="<default:" +str(cfg["noise_default"])+ ">",
         type=int, help='reduces image noise by not emitting pixels with power lower or equal than this setting')
+    parser.add_argument('--overscan', default=cfg["overscan_default"], metavar="<default:" +str(cfg["overscan_default"])+ ">",
+        type=int, help="overscan image lines to avoid incorrect power levels for pixels at left and right borders, number in pixels, default off")
+    parser.add_argument('--showoverscan', action='store_true', default=False, help='show overscan pixels (note that this is visible and part of the gcode emitted!)' )
     parser.add_argument('--constantburn', action='store_true', default=False, help='use constant burn mode M3 (a bit more dangerous!), instead of dynamic burn mode M4')
     parser.add_argument('--origin', default=None, nargs=2, metavar=('Xdelta', 'Ydelta'),
         type=float, help="translate origin by (Xdelta,Ydelta) (default not set, option --selfcenter cannot be used at the same time)")
@@ -134,18 +142,18 @@ def main() -> int:
 
     args = parser.parse_args()
 
-    try:
-        if args.origin is not None and args.selfcenter:
-            print("options --selfcenter and --origin cannot be used at the same time, program abort")
-            return 1
+#    try:
+    if args.origin is not None and args.selfcenter:
+        print("options --selfcenter and --origin cannot be used at the same time, program abort")
+        return 1
 
-        return svg2gcode(args)
-    except KeyboardInterrupt:
-        print(f"svg2gcode aborted!")
-    except Exception as error:
-        print(error)
-
-    return 1
+    return svg2gcode(args)
+#    except KeyboardInterrupt:
+#        print(f"svg2gcode aborted!")
+#    except Exception as error:
+#        print(error)
+#
+#    return 1
 
 if __name__ == '__main__':
     sys.exit(main())
