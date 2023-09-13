@@ -8,7 +8,7 @@ Gcode produced in this way has the advantage that drawings and images have the s
 This makes combined cutting and engraving as easy as orientating the (wood) slab once.
 
 Controlling laser power, pixel size and other settings can be done via commandline parameters (see below) or within Inkscape using the XMLeditor.
-Image attributes ```gcode_pixelsize```, ```gcode_maxpower```, ```gcode_speed```, ```gcode_noise``` and ```gcode_speedmoves``` can be set per object (they must be created: use **+**). Note that this overrides explicit or default commandline settings.
+Image attributes ```gcode_pixelsize```, ```gcode_maxpower```, ```gcode_speed```, ```gcode_noise```, ```gcode_speedmoves```, ```gcode_overscan``` and ```gcode_showoverscan``` can be set per object (they must be created: use **+**). Note that this overrides explicit or default commandline settings.
 
 You have full control over the coordinate system of the result gcode file via option *--origin* and *--scale*.
 Option *--selfcenter* can be used to set the origin at the center of the image.
