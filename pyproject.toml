@@ -7,7 +7,7 @@ name = "svg2gcode"
 authors = [{name = "Johannes Noordanus", email = "mailjohannes.mailnoordanus@gmail.com"}]
 readme = "README.md"
 license = {file = "LICENSE"}
-classifiers = ["License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)"]
+classifiers = ["License :: OSI Approved :: MIT License"]
 dynamic = ["version", "description"]
 
 keywords = ["scalable vector graphics", "svg", "image", "laser cutter", "laser engraving"]
