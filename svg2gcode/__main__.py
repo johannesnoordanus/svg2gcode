@@ -56,9 +56,9 @@ def svg2gcode(args) -> int:
         if os.path.isfile(image_filename):
             os.remove(image_filename)
 
-        center = compiler.bbox_center()
-        center = (-round(center[0], compiler.precision), -round(center[1], compiler.precision))
+        center = compiler.boundingbox.center()
         print(f"center: {center}")
+        center = (-round(center[0], compiler.precision), -round(center[1], compiler.precision))
 
         # init compiler again
         compiler = init_compiler(args)
