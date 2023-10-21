@@ -82,10 +82,10 @@ options:
                         overscan image lines to avoid incorrect power levels for pixels at left and right borders, number in pixels, default off
   --showoverscan        show overscan pixels (note that this is visible and part of the gcode emitted!)
   --constantburn        use constant burn mode M3 (a bit more dangerous!), instead of dynamic burn mode M4
-  --origin Xdelta Ydelta
-                        translate origin by (Xdelta,Ydelta) (default not set, option --selfcenter cannot be used at the same time)
-  --scale Xfactor Yfactor
-                        scale svg with (Xfactor,Yfactor) (default not set)
+  --origin delta-x delta-y
+                        translate origin by vector (delta-x,delta-y) in mm (default not set, option --selfcenter cannot be used at the same time)
+  --scale factor-x factor-y
+                        scale svg with (factor-x,factor-y) (default not set)
   --rotate <default:0>  number of degrees to rotate
   --splitfile           split gcode output of SVG path and image objects
   --xmaxtravel <default:300>
