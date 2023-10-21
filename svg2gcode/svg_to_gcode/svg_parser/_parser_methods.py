@@ -57,8 +57,11 @@ def add_viewbox_transformation(transformation: Transformation, transform_origin,
         # flipupdown) at (0,0) (so the canvas has positive coordinates only).
 
         # (transformations are in reverse order see 'Note' below)
-        if origin is not None and ((vwbox["x"] + origin[0]) or (vwbox["y"]  + origin[1])):
-            up_transformation.add_translation(vwbox["x"] + origin[0],vwbox["y"] + origin[1])
+        if origin is not None:
+            up_transformation.add_translation(origin[0], origin[1])
+
+        if vwbox["x"] or vwbox["y"]:
+            up_transformation.add_translation(vwbox["x"], vwbox["y"])
 
         # rotate it (around the origin)
         if rotate is not None and rotate > 0:
@@ -101,10 +104,7 @@ def get_viewBox(root: ElementTree.Element) -> {}:
         vwbox["x"], vwbox["y"], vwbox["width"], vwbox["height"] = re.findall("\-?[0-9]+\.?[0-9]*", root_vwbox)
 
         # viewBox "x" and "y" represent the upper left corner of the document.
-        # when non zero, the upper left corner of the canvas should be corrected to (0,0)
-        # (a laser or CNC machine has a positive workarea only, which should be as large as possible)
-
-        # not that viewBox parameters should not have unit letters (they are 'in' user-units)
+        # note that viewBox parameters should not have unit letters (they are 'in' user-units)
         vwbox["x"] = float(vwbox["x"])
         vwbox["y"] = float(vwbox["y"])
 
@@ -140,11 +140,11 @@ def parse_root(root: ElementTree.Element, transform_origin=True, viewbox=None, d
         viewbox = get_viewBox(root)
 
         if not viewbox:
-            # get viewport (as a fallback)
-
             viewbox = { 'x':0.0, 'y':0.0, 'width':0.0, 'height':0.0 }
+            # get viewport width (as a fallback)
             width_str = root.get("width")
             viewbox["width"] = float(width_str) if width_str.isnumeric() else float(width_str[:-2])
+            # get viewport height (as a fallback)
             height_str = root.get("height")
             viewbox["height"] = float(height_str) if height_str.isnumeric() else float(height_str[:-2])
 
@@ -185,7 +185,7 @@ def parse_root(root: ElementTree.Element, transform_origin=True, viewbox=None, d
                                 add_viewbox_transformation(transformation, transform_origin, viewbox, origin, scale, rotate))
                     curves.append(ri)
 
-        # Continue the recursion
+        # Continue recursion
         curves.extend(parse_root(element, transform_origin, viewbox, draw_hidden, visible, transformation, origin, scale, rotate))
 
     # ToDo implement shapes class

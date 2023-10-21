@@ -67,6 +67,8 @@ def svg2gcode(args) -> int:
         # emit gcode for svg
         print("pass 2")
         compiler.compile_to_file(args.gcode, args.svg, parse_file(args.svg, delta_origin=center, scale_factor=args.scale, rotate_deg=args.rotate), passes=args.passes)
+        center = compiler.boundingbox.center()
+        print(f"new center: {center}")
 
     return 0
 
@@ -126,10 +128,10 @@ def main() -> int:
         type=int, help="overscan image lines to avoid incorrect power levels for pixels at left and right borders, number in pixels, default off")
     parser.add_argument('--showoverscan', action='store_true', default=False, help='show overscan pixels (note that this is visible and part of the gcode emitted!)' )
     parser.add_argument('--constantburn', action='store_true', default=False, help='use constant burn mode M3 (a bit more dangerous!), instead of dynamic burn mode M4')
-    parser.add_argument('--origin', default=None, nargs=2, metavar=('Xdelta', 'Ydelta'),
-        type=float, help="translate origin by (Xdelta,Ydelta) (default not set, option --selfcenter cannot be used at the same time)")
-    parser.add_argument('--scale', default=None, nargs=2, metavar=('Xfactor', 'Yfactor'),
-        type=float, help="scale svg with (Xfactor,Yfactor) (default not set)")
+    parser.add_argument('--origin', default=None, nargs=2, metavar=('delta-x', 'delta-y'),
+        type=float, help="translate origin by vector (delta-x,delta-y) in mm (default not set, option --selfcenter cannot be used at the same time)")
+    parser.add_argument('--scale', default=None, nargs=2, metavar=('factor-x', 'factor-y'),
+        type=float, help="scale svg with (factor-x,factor-y) (default not set)")
     parser.add_argument('--rotate', default=cfg["rotate_default"], metavar="<default:" +str(cfg["rotate_default"])+ ">",
         type=int, help="number of degrees to rotate")
     parser.add_argument('--splitfile', action='store_true', default=False, help='split gcode output of SVG path and image objects' )
