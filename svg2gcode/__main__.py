@@ -57,8 +57,9 @@ def svg2gcode(args) -> int:
             os.remove(image_filename)
 
         center = compiler.boundingbox.center()
+        center = (round(center[0], compiler.precision), round(center[1], compiler.precision))
         print(f"center: {center}")
-        center = (-round(center[0], compiler.precision), -round(center[1], compiler.precision))
+        center = (-center[0], -center[1])
 
         # init compiler again
         compiler = init_compiler(args)
@@ -68,6 +69,7 @@ def svg2gcode(args) -> int:
         print("pass 2")
         compiler.compile_to_file(args.gcode, args.svg, parse_file(args.svg, delta_origin=center, scale_factor=args.scale, rotate_deg=args.rotate), passes=args.passes)
         center = compiler.boundingbox.center()
+        center = (round(center[0], compiler.precision), round(center[1], compiler.precision))
         print(f"new center: {center}")
 
     return 0
