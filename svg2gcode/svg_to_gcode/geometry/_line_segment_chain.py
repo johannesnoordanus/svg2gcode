@@ -67,7 +67,7 @@ class LineSegmentChain(Chain):
                 new_t = 1
 
             line_end = shape.point(new_t)
-            line = Line(line_start, line_end)
+            line = Line(line_start, line_end, shape.path_attrib)
 
             distance = Curve.max_distance(shape, line, t_range1=(t, new_t))
 

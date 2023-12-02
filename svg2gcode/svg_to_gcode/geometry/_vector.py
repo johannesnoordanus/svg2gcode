@@ -22,6 +22,9 @@ class Vector:
 
         return Vector.scalar_product(self, other)
 
+    def __eq__(self, other):
+        return self.x == other.x and self.y == other.y
+
     __rmul__ = __mul__
 
     def __truediv__(self, other):

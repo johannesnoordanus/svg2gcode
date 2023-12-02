@@ -173,8 +173,10 @@ def parse_root(root: ElementTree.Element, transform_origin=True, viewbox=None, d
         # If the current element is opaque and visible, draw it
         if draw_hidden or visible:
             if element.tag == "{%s}path" % NAMESPACES["svg"]:
-                path = Path(element.attrib['d'],
+                # parse element
+                path = Path(element.attrib,
                                add_viewbox_transformation(transformation, transform_origin, viewbox, origin, scale, rotate))
+
                 curves.extend(path.curves)
             else:
                 if element.tag == "{%s}image" % NAMESPACES["svg"]:

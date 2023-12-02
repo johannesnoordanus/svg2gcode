@@ -16,9 +16,12 @@ class Path:
     command_lengths = {'M': 2, 'm': 2, 'L': 2, 'l': 2, 'H': 1, 'h': 1, 'V': 1, 'v': 1, 'Z': 0, 'z': 0, 'C': 6, 'c': 6,
                        'Q': 4, 'q': 4, 'S': 4, 's': 4, 'T': 2, 't': 2, 'A': 7, 'a': 7}
 
-    __slots__ = "curves", "initial_point", "current_point", "last_control", "draw_move", "transformation"
+    __slots__ = "path_attrib", "curves", "initial_point", "current_point", "last_control", "draw_move", "transformation"
 
-    def __init__(self, d: str, transformation=None):
+    #def __init__(self, d: str, transformation=None, style=None, name_id=None):
+    def __init__(self, path_attrib, transformation=None):
+
+        self.path_attrib = path_attrib
 
         self.curves = []
         self.initial_point = Vector(0, 0)  # type: Vector
@@ -28,7 +31,7 @@ class Path:
         self.transformation = transformation
 
         try:
-            self._parse_commands(d)
+            self._parse_commands(path_attrib['d'])
         except Exception as generic_exception:
             warnings.warn(f"Terminating path. The following unforeseen exception occurred: {generic_exception}")
 
@@ -144,7 +147,7 @@ class Path:
             end = Vector(x, y)
 
             line = Line(self.transformation.apply_affine_transformation(start),
-                        self.transformation.apply_affine_transformation(end))
+                        self.transformation.apply_affine_transformation(end), self.path_attrib)
 
             self.current_point = end
 
@@ -176,7 +179,7 @@ class Path:
             trans_control1 = self.transformation.apply_affine_transformation(Vector(control1_x, control1_y))
             trans_control2 = self.transformation.apply_affine_transformation(Vector(control2_x, control2_y))
 
-            cubic_bezier = CubicBazier(trans_start, trans_end, trans_control1, trans_control2)
+            cubic_bezier = CubicBazier(trans_start, trans_end, trans_control1, trans_control2, self.path_attrib)
 
             self.last_control = Vector(control2_x, control2_y)
             self.current_point = Vector(x, y)
@@ -199,6 +202,7 @@ class Path:
             else:
                 bazier = absolute_quadratic_bazier(*control2, *end)
 
+            #self.current_point = start
             self.current_point = end
 
             return bazier
@@ -213,7 +217,7 @@ class Path:
             trans_new_end = self.transformation.apply_affine_transformation(Vector(x, y))
             trans_control1 = self.transformation.apply_affine_transformation(Vector(control1_x, control1_y))
 
-            quadratic_bezier = QuadraticBezier(trans_end, trans_new_end, trans_control1)
+            quadratic_bezier = QuadraticBezier(trans_end, trans_new_end, trans_control1, self.path_attrib)
 
             self.last_control = Vector(control1_x, control1_y)
             self.current_point = Vector(x, y)

@@ -40,6 +40,10 @@ class Chain(Curve):
         """Return a curve at a given index"""
         return self._curves[index]
 
+    def set(self, index: int, curve: Curve):
+        """Set a curve at a given index"""
+        self._curves[index] = curve
+
     def append(self, new_curve: Curve):
         """Append a new curve to the chain"""
         raise NotImplementedError("All chains must implement an append command")

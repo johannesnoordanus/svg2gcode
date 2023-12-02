@@ -12,9 +12,12 @@ import numpy as np
 
 from svg2gcode.svg_to_gcode.compiler.interfaces import Interface
 from svg2gcode.svg_to_gcode.geometry import Curve
-from svg2gcode.svg_to_gcode.geometry import LineSegmentChain, Vector, RasterImage
+from svg2gcode.svg_to_gcode.geometry import LineSegmentChain, Line, Vector, RasterImage
 from svg2gcode.svg_to_gcode import DEFAULT_SETTING
 from svg2gcode.svg_to_gcode import TOLERANCES, SETTING, check_setting
+
+from svg2gcode.svg_to_gcode import formulas
+from svg2gcode.svg_to_gcode import css_color
 
 from svg2gcode import __version__
 from datetime import datetime
@@ -204,7 +207,65 @@ class Compiler:
                     file.write((self.gcode_file_header() if len(self.body) == 0 else "") + '\n' +  self.compile_images() + '\n' + self.interface.program_end() + '\n')
                     logger.info(f"Added image(s) to {file_name}")
 
-    def append_line_chain(self, line_chain: LineSegmentChain):
+    def orthogonal_offset(self, offset: float, line: Line) -> Line:
+
+        def offset_direction(line: Line) -> (int,int):
+            d_x = (line.end.x - line.start.x)
+            d_y = (line.end.y - line.start.y)
+            direction = (0,0)
+
+            if d_x > 0 and d_y > 0:
+                direction = (-1,1)
+            elif d_x > 0 and d_y == 0:
+                direction = (0,1)
+            elif d_x < 0 and d_y == 0:
+                direction = (0,-1)
+            elif d_x < 0 and d_y < 0:
+                direction = (1,-1)
+            elif d_x == 0 and d_y < 0:
+                direction = (1,0)
+            elif d_x == 0 and d_y > 0:
+                direction = (-1,0)
+            elif d_x > 0 and d_y < 0:
+                direction = (1,1)
+            elif d_x < 0 and d_y > 0:
+                direction = (-1,-1)
+
+            return direction
+
+        delta_sign = offset_direction(line)
+
+        # calculate ortogonal line vector((0,0),(delta_x,delta_y)) of 'offset' length:
+        # (1)  y = 1/slope * x
+        #
+        # of length offset:
+        # (2)  x^2 + y^2                = offset^2     (Pythagoras)
+        # (3)  x^2 + (1/slope * x)^2    = offset^2
+        # (4)  (1 + (1/slope)^2) * x^2  = offset^2
+        # (5)  x^2 = offset^2 / (1 + (1/slope)^2)
+
+        if line.slope == 0:
+            # vertical line
+            delta_x = 0
+            delta_y = delta_sign[1] * offset
+        elif line.slope == 1:
+            # horizontal line
+            delta_x = delta_sign[0] * offset
+            delta_y = 0
+        else:
+            # slope
+            inv_slope = abs((1/line.slope))
+            delta_x = round(math.sqrt((offset ** 2) / (1 + inv_slope ** 2)), self.precision)
+            delta_y = round(inv_slope * delta_x, self.precision)
+
+            # set right direction
+            delta_x = delta_sign[0] * (-1 if (offset < 0) else 1) * delta_x
+            delta_y = delta_sign[1] * (-1 if (offset < 0) else 1) * delta_y
+
+        # add delta vector to line start and end vectors
+        return Line(line.start + Vector(delta_x, delta_y), line.end + Vector(delta_x, delta_y), "offset")
+
+    def append_line_chain(self, line_chain: LineSegmentChain, step: float, color: int = None):
         """
         Draws a LineSegmentChain by calling interface.linear_move() for each segment. The resulting code is appended to
         self.body
@@ -214,32 +275,34 @@ class Compiler:
             logger.warn("Attempted to parse empty LineChain")
             return
 
-        code = []
+        code = [f"\n; delta: {step}"]
         start = line_chain.get(0).start
 
-	      # Move to the next line_chain when the next line segment doesn't connect to the end of the previous one.
+        # set laser power to color value when svg attribute 'stroke' (color) is set
+        laser_power = color if color is not None else self.settings["laser_power"]
+
+	# Move to the next line_chain when the next line segment doesn't connect to the end of the previous one.
         if self.interface.position is None or abs(self.interface.position - start) > TOLERANCES["operation"]:
             if self.interface.position is None or self.settings["rapid_move"]:
                 # move to the next line_chain: set laser off, rapid move to start of chain,
                 # set movement (cutting) speed, set laser mode and power on
-                code = [self.interface.laser_off(), self.interface.rapid_move(start.x, start.y),
+                code += [self.interface.laser_off(), self.interface.rapid_move(start.x, start.y),
                         self.interface.set_movement_speed(self.settings["movement_speed"]),
-                        self.interface.set_laser_mode(self.settings["laser_mode"]), self.interface.set_laser_power_value(self.settings["laser_power"])]
-
-                self.boundingbox.update(start)
+                        self.interface.set_laser_mode(self.settings["laser_mode"]), self.interface.set_laser_power_value(laser_power)]
             else:
                 # move to the next line_chain: set laser mode, set laser power to 0 (cutting is off),
                 # set movement speed, (no rapid) move to start of chain, set laser to power
-                code = [self.interface.set_laser_mode(self.settings["laser_mode"]), self.interface.set_laser_power_value(0),
+                code += [self.interface.set_laser_mode(self.settings["laser_mode"]), self.interface.set_laser_power_value(0),
                         self.interface.set_movement_speed(self.settings["movement_speed"]), self.interface.linear_move(start.x, start.y),
-                        self.interface.set_laser_power_value(self.settings["laser_power"])]
+                        self.interface.set_laser_power_value(laser_power)]
+
+            self.boundingbox.update(start)
 
             if self.settings["dwell_time"] > 0:
-                code = [self.interface.dwell(self.settings["dwell_time"])] + code
+                code += [self.interface.dwell(self.settings["dwell_time"])] + code
 
         for line in line_chain:
             code.append(self.interface.linear_move(line.end.x, line.end.y))
-            # update bounding box
             self.boundingbox.update(line.end)
 
         self.body.extend(code)
@@ -342,6 +405,30 @@ class Compiler:
         # distance = √C^2
         return math.sqrt(abs(A[0] - B[0])**2 + abs(A[1] - B[1])**2)
 
+    def line_intersection(self, l1: Line, l2:Line) -> Vector:
+        """
+        Line intersection (https://en.wikipedia.org/wiki/Line–line_intersection)
+        """
+        x1, y1 = l1.start
+        x2, y2 = l1.end
+        x3, y3 = l2.start
+        x4, y4 = l2.end
+
+        # denomintor
+        d = round((x1 - x2)*(y3 - y4) - (y1 - y2)*(x3 - x4), self.precision)
+
+        # Note that the cutoff below is needed to eliminate line artifacts (spikes) of the render result.
+        # This is due to calculation (precision) errors resulting in the y coordinate of the intersection to
+        # be off by a factor (2,3, 10?). It might be that the rounding applied here is not correct, or/and
+        # that the equations are inherently sensitive to rounding errors at certain inputs.
+        # TODO: analize this
+        if abs(d) < 0.01:
+            # no intersection
+            return None
+
+        return Vector( round(((x1*y2 - y1*x2) * (x3 - x4) - (x1 - x2) * (x3*y4 - y3*x4))/d, self.precision),
+                       round(((x1*y2 - y1*x2) * (y3 - y4) - (y1  - y2) * (x3*y4 - y3*x4))/d, self.precision) )
+
     def image2gcode(self, img_attrib: dict[str, Any], img=None, transformation = None):
 
         # create image conversion object
@@ -381,10 +468,60 @@ class Compiler:
         self.boundingbox.update(bbox_image[0])
         self.boundingbox.update(bbox_image[1])
 
+    def parse_style_attribute(self, curve: Curve) -> {}:
+        """
+        Parse style attribute.
+        for example "fill:#F4CF84;fill-rule:evenodd;stroke:#D07735;"
+        """
+
+        style = {'fill' : None, 'fill-rule': None, 'stroke': None, 'stroke-width': None}
+
+        # parse style curve
+
+        if curve.path_attrib and 'style' in curve.path_attrib:
+            style_str = curve.path_attrib['style']
+
+            # parse fill
+            if 'fill' in style_str:
+                fill = re.search('fill:#[A-Fa-f0-9]+',style_str)
+                if fill:
+                    style['fill'] = re.search('#[A-Fa-f0-9]+', fill.group(0)).group(0)
+            # parse fill-rule
+            if 'fill-rule' in style_str:
+                fill_rule = re.search('fill-rule:#(evenodd|nonzero)',style_str)
+                if fill_rule:
+                    style['fill-rule'] = re.search('(evenodd|nonzero)', fill_rule.group(0)).group(0)
+            # parse stroke
+            if 'stroke' in style_str:
+                stroke = re.search('stroke:#[A-Fa-f0-9]+',style_str)
+                if stroke:
+                    style['stroke'] = re.search('#[A-Fa-f0-9]+', stroke.group(0)).group(0)
+            # parse stroke-width
+            if 'stroke-width' in style_str:
+                #stroke_width = re.search('stroke-width:\.?[0-9]+',style_str)
+                #stroke_width = re.search('stroke-width:([0-9]+|\.?[0-9]+)',style_str)
+                stroke_width = re.search('stroke-width:(\d*\.)?\d+',style_str)
+                if stroke_width:
+                    style['stroke-width'] = re.search('(\d*\.)?\d+', stroke_width.group(0)).group(0)
+
+        # parse direct style curves
+
+        # parse fill
+        if 'fill' in curve.path_attrib:
+            style['fill'] = curve.path_attrib['fill']
+        if 'fill-rule' in curve.path_attrib:
+            style['fill-rule'] = curve.path_attrib['fill-rule']
+        if 'stroke-width' in curve.path_attrib:
+            style['stroke-width'] = curve.path_attrib['stroke-width']
+
+        return style
+
     def append_curves(self, curves: list[Curve]):
         """
         Draws curves.
         """
+        path_curves = {}
+
         for curve in curves:
             if isinstance(curve, RasterImage):
                 # curve is 'image', draw it
@@ -396,13 +533,104 @@ class Compiler:
                     # Draw image by converting raster image scan lines to gcode, possibly applying tranformations on each pixel
                     self.image2gcode(curve.img_attrib, img, curve.transformation)
             else:
-                # curve is 'path', draw it
-                # Draws curves by approximating them as line segments and calling self.append_line_chain().
-                # The resulting code is appended to self.body
+                # curve is a 'path', approximate it (when needed) as line segments.
+                # organize curves by 'name_id' to be able to apply fill/stroke color and
+                # line width later on.
+
+                curve_name_id = ""
+                # parse id
+                if curve.path_attrib:
+                    curve_name_id = curve.path_attrib['id']
+
+                if curve_name_id not in path_curves:
+                    path_curves[curve_name_id] = []
+
                 line_chain = LineSegmentChain()
+                # approximate curve
                 approximation = LineSegmentChain.line_segment_approximation(curve)
                 line_chain.extend(approximation)
-                self.append_line_chain(line_chain)
+
+                # stitch chains when the next chain starts at the end of the previous chain
+                if len(path_curves[curve_name_id]) and path_curves[curve_name_id][-1].get(-1).end == line_chain.get(0).start:
+                    path_curves[curve_name_id][-1].extend(line_chain)
+                else:
+                    # add line segments to curves having this id
+                    path_curves[curve_name_id].append(line_chain)
+
+        # emit all paths (organized by name id)
+        for name_id in path_curves:
+            # for all line chains
+            for line_chain in path_curves[name_id]:
+
+                pixel_size = float(self.settings["pixel_size"])
+                # default stroke width is one line (thickness)
+                stroke_width = pixel_size
+                stroke_color = ""
+                width = 0
+
+                style = self.parse_style_attribute(line_chain.get(0))
+                if style:
+                    if "stroke" in style:
+                        stroke_color = style['stroke']
+                    if "stroke-width" in style:
+                        stroke_width = float(style['stroke-width'])
+                        width = int(round(stroke_width/pixel_size, self.precision))
+
+                steps = [0]
+                if len(stroke_color) and width:
+                    for delta in range(width):
+                        if delta:
+                            steps.append(round(delta * pixel_size, self.precision))
+                            if not (delta + 1 == width and width % 2 == 0):
+                                steps.append(round(-delta * pixel_size, self.precision))
+
+                for step in steps:
+                    if step:
+                        delta_chain = LineSegmentChain()
+
+                        for line in line_chain:
+                            line_delta = self.orthogonal_offset(step, line)
+
+                            if delta_chain.chain_size():
+                                # calculate intersection of previous line and current line
+                                intersect = self.line_intersection(delta_chain.get(-1), line_delta)
+                                large = 200
+                                if intersect is not None:
+                                    # set prev_line.end to intersect
+                                    prev_line = delta_chain.get(-1)
+                                    prev_line.end = intersect
+                                    delta_chain.set(-1, prev_line)
+
+                                    # set line_delta start to intersect
+                                    line_delta.start = intersect
+                                else:
+                                    # connect line, to prevent ValueErrors from delta_chain.append() below
+                                    line_delta.start = delta_chain.get(-1).end
+
+                            delta_chain.append(line_delta)
+
+                        # check if line chain is a loop
+                        if line_chain.get(0).start == line_chain.get(-1).end:
+                            # fix delta chain
+                            intersect = self.line_intersection(delta_chain.get(0), delta_chain.get(-1))
+                            if intersect is not None:
+                                # update start of loop
+                                start_loop = delta_chain.get(0)
+                                start_loop.start = intersect
+                                delta_chain.set(0, start_loop)
+
+                                # update end of loop
+                                end_loop = delta_chain.get(-1)
+                                end_loop.end = intersect
+                                delta_chain.set(-1, end_loop)
+
+                        # linear_power(self, pixel: UInt8, maxpower: int, offset: int = 0, invert: bool = True) -> int
+                        inverse_bw = Image2gcode.linear_power(css_color.parse_css_color2bw8(stroke_color), self.settings["maximum_image_laser_power"])
+                        self.append_line_chain(delta_chain, step, inverse_bw)
+                    else:
+                        inverse_bw = Image2gcode.linear_power(css_color.parse_css_color2bw8(stroke_color),
+                                        self.settings["maximum_image_laser_power"]) if len(stroke_color) else None
+                        self.append_line_chain(line_chain, step, inverse_bw)
 
     def check_axis_maximum_travel(self):
         return self.settings["x_axis_maximum_travel"] is not None and self.settings["y_axis_maximum_travel"] is not None

@@ -14,7 +14,7 @@ keywords = ["scalable vector graphics", "svg", "image", "laser cutter", "laser e
 dependencies = [
     "numpy >= 1.24.3",
     "Pillow >= 9.5.0",
-    "image2gcode >= 2.8.2",
+    "image2gcode >= 2.9.6",
 ]
 requires-python = ">=3.7"
 
