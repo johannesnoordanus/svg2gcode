@@ -1,20 +1,26 @@
 # svg2gcode
 
-A commandline steering program that enables laser cutting of svg drawings```<svg:path ..>tags``` and combined engraving of svg images```<svg:image ..>tags```.
+A commandline steering program that enables laser cutting of svg drawings```<svg:path ..> tags``` and combined engraving of svg images```<svg:image ..> tags```.
 It is based on library SvgToGcode (*fork*: https://github.com/johannesnoordanus/SvgToGcode) which should be installed <sup>(*)</sup>.
 
 Drawings and images can be composed using Inkscape (for example) and saved to a *.svg* file. This file can be converted to gcode by *svg2gcode*.
 Gcode produced in this way has the advantage that drawings and images have the same - relative - position and orientation as can be seen on the composer window.
 This makes combined cutting and engraving as easy as orientating the (wood) slab once.
 
+SVG *path* and *image* objects are supported. Note that other drawing object must be converted to a *path* to be able to translate them to a gcode sequence.
+Recently (version 3.0.0 and higher) support for *'stroke'* color and *'stroke-width'* attributes of SVG *path* objects is added.
+This means that it is possible to make laser engravings of text (fonts) and other drawing objects having a border with a specific color.
+It is even possible to use alpha channel for these drawing objects now.
+
 Controlling laser power, pixel size and other settings can be done via commandline parameters (see below) or within Inkscape using the XMLeditor.
 Image attributes ```gcode_pixelsize```, ```gcode_maxpower```, ```gcode_speed```, ```gcode_noise```, ```gcode_speedmoves```, ```gcode_overscan``` and ```gcode_showoverscan``` can be set per object (they must be created: use **+**). Note that this overrides explicit or default commandline settings.
 
-You have full control over the coordinate system of the result gcode file via option *--origin* and *--scale*.
+You have full control of placing (locating) of the result gcode via options *--origin*, *--rotate, and *--scale*.
 Option *--selfcenter* can be used to set the origin at the center of the image.
 Note that gcode file headers contain compile information like the boundingbox and boundingbox center coordinates.
 
-Version 2.0.0 and above have important new speed optimizations. Engravings run significantly faster and skip from one image zone to the other at maximum speed. See options ```--speedmoves``` and ```--noise``` for example.
+Version 2.0.0 and higher have important speed optimizations. Engravings run significantly faster and skip from one image zone to the other at maximum speed. See options ```--speedmoves``` and ```--noise``` for example. Version 3.0.0 and higher have support for 'stroke' (color) and 'stroke-width' attributes, this means that cutting a path works a bit different now. 
+When the 'stroke' attribute of a *path* is nonexistent or set to none, the path will be laser burned with the value set by option *--cuttingpower*.
 
 To summarize:
 
@@ -30,6 +36,7 @@ General optimizations
 - moves at high speed (G0) over 10mm (default) or more zero pixels
 - low burn levels (stray pixels) can be suppressed (default off)
 - option *--constantburn* selects constant burn mode *M3* (for cutting and engraving) instead of default dynamic burn mode *M4*
+- borders are drawn in paralleli and in one go to the *path* coordinates.
  
 **Tip**: use commandline program *grblhud* *(https://github.com/johannesnoordanus/grblhud)* to have full control over gcode execution,
 also, program *image2gcode* has similar capabilities but handles raster images files (like *png* and *jpg*) directly. 
