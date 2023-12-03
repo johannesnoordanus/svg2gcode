@@ -23,8 +23,9 @@ Note that gcode file headers contain compile information like the boundingbox an
 
 Version 2.0.0 and higher have important speed optimizations. Engravings run significantly faster and skip from one image zone to the other at maximum speed.
 See options ```--speedmoves``` and ```--noise``` for example.
+
 Version 3.0.0 and higher have support for 'stroke' (color) and 'stroke-width' attributes, this means that cutting a path works a bit different now. 
-When the 'stroke' attribute of a *path* is nonexistent or set to none, the path will be laser burned with the value set by option *--cuttingpower*.
+When the *stroke* attribute of a *path* is nonexistent or set to none, the path will be laser burned with the value set by option *--cuttingpower*.
 
 To summarize:
 
@@ -44,6 +45,7 @@ General optimizations
  
 **Tip**: use commandline program *grblhud* *(https://github.com/johannesnoordanus/grblhud)* to have full control over gcode execution,
 also, program *image2gcode* has similar capabilities but handles raster images files (like *png* and *jpg*) directly. 
+
 **Tip2**: another program *LaserWeb* (not made by me) is quite capable and has an excelent 3D gcode visualizer, it is able to calculate 3D paths for CNC machines, including the bit diameter.
 
 ### Install:
@@ -118,9 +120,9 @@ imagespeed = 6000
 It can be used with any parameter which takes a value, and alows to persist your laser settings.
 
 ### Examples:
-  - cutting a SVG *path* element:
+#### Cutting a SVG *path* element:
 
-    The svg below draws a triangle
+The svg below draws a triangle
 ```
     > cat line_hoek.svg
     <?xml version="1.0" encoding="UTF-8" standalone="no"?>
@@ -138,8 +140,8 @@ It can be used with any parameter which takes a value, and alows to persist your
     
     > svg2gcode --showimage line_hoek.svg line_hoek.gc
 ```
-    This generates gcode file line_hoek.gc (and shows the result in a separate viewer).
-    The first lines of the gcode file contain comment lines *;* as shown below.
+This generates gcode file *line_hoek.gc* (and shows the result in a separate viewer).
+The first lines of the gcode file contain comment lines *;* as shown below.
 ```
     > head -n 25 line_hoek.gc
     ;    svg2gcode 3.0.0 (2023-12-03 12:11:58)
@@ -166,16 +168,16 @@ It can be used with any parameter which takes a value, and alows to persist your
     ;    GRBL 1.1, unit=mm, absolute coordinates
 
 ```
-    Use *gcode2image* to get an acurate representation of the gcode when run on a lasercutter.
+Use *gcode2image* to get an acurate representation of the gcode when run on a lasercutter.
 ```
     > gcode2image --showimage --flip --showorigin --grid --showG0 line_hoek.gc line_hoek.png
 ```
-    This will show gray lines (not black) because a low power (burn) level is used that represent collor *#A0A0A0* from the *stroke* attribute within the *.svg* file:
+This will show gray lines (not black) because a low power (burn) level is used that represent color *#A0A0A0* from the *stroke* attribute within the *.svg* file:
 ```
     style="fill:none;stroke:#A0A0A0;stroke-width:.1"
 ```
-    So the conversion generates an engraving for the *.svg* and will not burn the lines with power set by *svg2gcode* option *--cuttingpower*.
-    The gcode after conversion will look like this:
+So the conversion generates an engraving for the *.svg* and will not burn the lines with power set by *svg2gcode* option *--cuttingpower*.
+The gcode after conversion will look like this:
 ```
     ; delta: 0
     M5
@@ -188,18 +190,18 @@ It can be used with any parameter which takes a value, and alows to persist your
     M5
     M2
 ```
-    Look at the power setting, it is S112 (which is low on a scale of 0 to 1000 which is the default)
-    Note: to get options and defaults:
+Look at the power setting, it is S112 (which is low on a scale of 0 to 1000 which is the default)
+Note: to get options and defaults:
 ```
     > svg2gcode --help
 ```
-    How do we cut these lines?
-    Change the *style* attribute line - within file line_hoek.svg - to the following:
+#### How do we cut these lines?
+Change the *style* attribute line - within file *line_hoek.svg* - to the following:
 ```
     style="fill:none;stroke:none;stroke-width:.1"
 ```
-    Run *svg2gcode* (with some options) again.
-    Now the gcode after conversion will look like this:
+Run *svg2gcode* (with same options) again.
+Now the gcode after conversion will look like this:
 ```
     ; delta: 0
     M5
@@ -212,17 +214,21 @@ It can be used with any parameter which takes a value, and alows to persist your
     M5
     M2
 ```
-    Note the power setting, it is S850 now. This is a burn setting!
+Note the power setting, it is S850 now. This is a burn setting!
 
-    To iterate this; make more passes, because that is often needed when cutting thicker material, run:
+To iterate this; make more passes, because that is often needed when cutting thicker material, run:
 ```
     > svg2gcode --showimage --passes 10 --pass_depth 0.05 line_hoek.svg line_hoek.gc
 ```
-    This will generate gcode that makes 10 passes and moves the Z-axis 0.05 mm down each pass.
-    So it will cut with a total depth of 5 mm.
-    Don't worry if your lasercutter has no Z-axis, because this parameter will be ignored and the burn will repeat (at the sime height) as specified.
-    If you have a CNC machine (which does have a Z-axis) you can mill in depth (so to speak), but you can also add - or switch to - a laser head and use the gcode to be able to really laser cut deeper!
-  - example command to create two types of gcode file, one containing the drawings of the .svg, the other containing the images:      
+This will generate gcode that makes 10 passes and moves the Z-axis 0.05 mm down each pass.
+So it will cut with a total depth of 5 mm.
+
+Don't worry if your lasercutter has no Z-axis, because this parameter will be ignored and the burn will repeat (at the same height) as specified.
+
+If you have a CNC machine (which does have a Z-axis) you can mill in depth (so to speak), but you can also add - or switch to - a laser head and use the gcode to be able to really laser cut deeper!
+
+#### Create two types of gcode file
+One containing the drawings of the .svg, the other containing the images:      
 ```
     > svg2gcode --splitfile ambachtmanlogo.svg logo.gc
     > ..
@@ -230,7 +236,6 @@ It can be used with any parameter which takes a value, and alows to persist your
     > logo.gc             # all drawings
     > logo_images.gc      # all images
 ```   
-
 
 ### Notes:
  - drawing objects - within the composer - must be converted to a```path```to be translated to a gcode sequence
