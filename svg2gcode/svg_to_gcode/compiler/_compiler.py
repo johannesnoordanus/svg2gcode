@@ -483,9 +483,9 @@ class Compiler:
 
             # parse fill
             if 'fill' in style_str:
-                fill = re.search('fill:#[A-Fa-f0-9]+',style_str)
+                fill = re.search('fill:.+;',style_str)
                 if fill:
-                    style['fill'] = re.search('#[A-Fa-f0-9]+', fill.group(0)).group(0)
+                    style['fill'] = fill.group(0)[5:-1]
             # parse fill-rule
             if 'fill-rule' in style_str:
                 fill_rule = re.search('fill-rule:#(evenodd|nonzero)',style_str)
@@ -493,13 +493,11 @@ class Compiler:
                     style['fill-rule'] = re.search('(evenodd|nonzero)', fill_rule.group(0)).group(0)
             # parse stroke
             if 'stroke' in style_str:
-                stroke = re.search('stroke:#[A-Fa-f0-9]+',style_str)
+                stroke = re.search('stroke:.+;',style_str)
                 if stroke:
-                    style['stroke'] = re.search('#[A-Fa-f0-9]+', stroke.group(0)).group(0)
+                    style['stroke'] = stroke.group(0)[7:-1]
             # parse stroke-width
             if 'stroke-width' in style_str:
-                #stroke_width = re.search('stroke-width:\.?[0-9]+',style_str)
-                #stroke_width = re.search('stroke-width:([0-9]+|\.?[0-9]+)',style_str)
                 stroke_width = re.search('stroke-width:(\d*\.)?\d+',style_str)
                 if stroke_width:
                     style['stroke-width'] = re.search('(\d*\.)?\d+', stroke_width.group(0)).group(0)
@@ -570,9 +568,9 @@ class Compiler:
 
                 style = self.parse_style_attribute(line_chain.get(0))
                 if style:
-                    if "stroke" in style:
+                    if style['stroke'] is not None and style['stroke'] != "none":
                         stroke_color = style['stroke']
-                    if "stroke-width" in style:
+                    if style['stroke-width'] is not None and style['stroke-width'] != "none":
                         stroke_width = float(style['stroke-width'])
                         width = int(round(stroke_width/pixel_size, self.precision))
 
@@ -628,8 +626,7 @@ class Compiler:
                         inverse_bw = Image2gcode.linear_power(css_color.parse_css_color2bw8(stroke_color), self.settings["maximum_image_laser_power"])
                         self.append_line_chain(delta_chain, step, inverse_bw)
                     else:
-                        inverse_bw = Image2gcode.linear_power(css_color.parse_css_color2bw8(stroke_color),
-                                        self.settings["maximum_image_laser_power"]) if len(stroke_color) else None
+                        inverse_bw = Image2gcode.linear_power(css_color.parse_css_color2bw8(stroke_color), self.settings["maximum_image_laser_power"]) if len(stroke_color) else None
                         self.append_line_chain(line_chain, step, inverse_bw)
 
     def check_axis_maximum_travel(self):
