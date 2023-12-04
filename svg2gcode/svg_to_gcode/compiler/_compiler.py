@@ -193,7 +193,10 @@ class Compiler:
 
         image_file_name = file_name.rsplit('.',1)[0] + "_images." + file_name.rsplit('.',1)[1]
         if len(self.gcode) == 0:
-            logger.warn(f'No image found, skipping "{image_file_name}"')
+            if self.settings["splitfile"]:
+                logger.warn(f"No image found, skipping '{image_file_name}'")
+            else:
+                logger.warn(f"No image found in file '{svg_file_name}'")
         else:
             if self.settings["splitfile"]:
                 # emit image objects to <filename>_images.<gcext>
@@ -474,16 +477,16 @@ class Compiler:
         for example "fill:#F4CF84;fill-rule:evenodd;stroke:#D07735;"
         """
 
-        style = {'fill' : None, 'fill-rule': None, 'stroke': None, 'stroke-width': None}
+        style = {'fill' : None, 'fill-rule': None, 'stroke': None, 'stroke-width': None, 'pathcut': None}
 
-        # parse style curve
+        # parse style attribute
 
         if curve.path_attrib and 'style' in curve.path_attrib:
             style_str = curve.path_attrib['style']
 
             # parse fill
             if 'fill' in style_str:
-                fill = re.search('fill:.+;',style_str)
+                fill = re.search('fill:[^;]+;',style_str)
                 if fill:
                     style['fill'] = fill.group(0)[5:-1]
             # parse fill-rule
@@ -493,7 +496,7 @@ class Compiler:
                     style['fill-rule'] = re.search('(evenodd|nonzero)', fill_rule.group(0)).group(0)
             # parse stroke
             if 'stroke' in style_str:
-                stroke = re.search('stroke:.+;',style_str)
+                stroke = re.search('stroke:[^;]+;',style_str)
                 if stroke:
                     style['stroke'] = stroke.group(0)[7:-1]
             # parse stroke-width
@@ -502,15 +505,29 @@ class Compiler:
                 if stroke_width:
                     style['stroke-width'] = re.search('(\d*\.)?\d+', stroke_width.group(0)).group(0)
 
-        # parse direct style curves
+            # parse pathcut
+            if 'gcode-pathcut' in style_str:
+                pathcut = re.search('gcode-pathcut:(true|false)',style_str)
+                if pathcut:
+                    style['pathcut'] = re.search('(true|false)', pathcut.group(0)).group(0)
 
-        # parse fill
+        # parse other attributes
+
+        # parse fill attribute
         if 'fill' in curve.path_attrib:
             style['fill'] = curve.path_attrib['fill']
         if 'fill-rule' in curve.path_attrib:
             style['fill-rule'] = curve.path_attrib['fill-rule']
+        # parse stroke attribute
+        if 'stroke' in curve.path_attrib:
+            style['stroke'] = curve.path_attrib['stroke']
+        # parse stroke-width attribute
         if 'stroke-width' in curve.path_attrib:
             style['stroke-width'] = curve.path_attrib['stroke-width']
+
+        # parse gcode_pathcut attribute
+        if 'gcode_pathcut' in curve.path_attrib:
+            style['pathcut'] = curve.path_attrib['gcode_pathcut']
 
         return style
 
@@ -563,12 +580,15 @@ class Compiler:
                 pixel_size = float(self.settings["pixel_size"])
                 # default stroke width is one line (thickness)
                 stroke_width = pixel_size
-                stroke_color = ""
-                width = 0
 
-                style = self.parse_style_attribute(line_chain.get(0))
+                first_line_of_chain = line_chain.get(0)
+
+                width = 0
+                stroke_color = ""
+                style = self.parse_style_attribute(first_line_of_chain)
                 if style:
-                    if style['stroke'] is not None and style['stroke'] != "none":
+                    if not (style['pathcut'] == 'true' or self.settings["pathcut"]) \
+                        and style['stroke'] is not None and style['stroke'] != "none":
                         stroke_color = style['stroke']
                     if style['stroke-width'] is not None and style['stroke-width'] != "none":
                         stroke_width = float(style['stroke-width'])

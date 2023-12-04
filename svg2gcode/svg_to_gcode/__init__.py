@@ -38,7 +38,8 @@ SETTING 	= {
                                 #                       more than 'n'mm
     "pixel_size",               # float                 sets image pixel size (in mm)
     "showimage",                # boolean               show image used for conversion to gcode
-    "splitfile"                 # boolean               return SVG path objects to <filename>.<gcext> and SVG image objects to <filename>_images.<gcext>
+    "splitfile",                # boolean               return SVG path objects to <filename>.<gcext> and SVG image objects to <filename>_images.<gcext>
+    "pathcut"                   # boolean               always cut SVG path objects! use laser_power setting
 }
 
 # Set defaults 'minimum_laser_power', 'pass_depth', 'dwell_time', 'laser_power', 'laser_mode', 'unit', 'distance_mode'
@@ -70,7 +71,8 @@ DEFAULT_SETTING 	= {
     "rapid_move":		10,		# default set to true, for images do a rapid move when skipping more than 10mm
     "pixel_size":               0.1,            # laser kerf is mostly < 0.1mm
     "showimage":                False,          # default image is not shown
-    "splitfile":                False           # SVG path and image objects are emitted to one file: <filename>.<gcext>
+    "splitfile":                False,           # SVG path and image objects are emitted to one file: <filename>.<gcext>
+    "pathcut":                  False           # always cut SVG path objects! use laser_power setting
 }
 
 def check_setting(setting: dict[str,Any] =None) -> bool:
@@ -112,7 +114,7 @@ def check_setting(setting: dict[str,Any] =None) -> bool:
             raise ValueError(f"Unknown '{key}' value '{setting[key]}'. Please specify one of the following: {UNITS}")
         if key == "distance_mode" and setting[key] not in DISTANCEMODE:
             raise ValueError(f"Unknown '{key}' value '{setting[key]}'. Please specify one of the following: {DISTANCEMODE}")
-        if key in {"fan","showimage","splitfile","image_showoverscan"} and setting[key] not in {True,False}:
+        if key in {"fan","showimage","splitfile","pathcut","image_showoverscan"} and setting[key] not in {True,False}:
             raise ValueError(f"Unknown '{key}' value '{setting[key]}'. Please specify one of the following: {{True,False}}")
         if key == "pixel_size" and setting[key] and (not isinstance(setting[key],(float)) or setting[key] <= 0):
             raise TypeError(f"'{key}' is of type '{type(setting[key])}' but should be of type {type(1.0)} and have a value > 0.0")

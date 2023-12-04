@@ -56,11 +56,11 @@ also, program *image2gcode* has similar capabilities but handles raster images f
 <sup>(*)</sup> Note that an upgraded and corrected version of this library is included. 
 ### Usage:
 ```
-svg2gcode --help
-usage: runsvg2gcode [-h] [--showimage] [--selfcenter] [--pixelsize <default:0.1>] [--imagespeed <default:800>] [--cuttingspeed <default:1000>]
-                    [--imagepower <default:300>] [--poweroffset <default:0>] [--cuttingpower <default:850>] [--passes <default:1>] [--pass_depth <default:0>]
-                    [--rapidmove <default:10>] [--noise <default:0>] [--overscan <default:0>] [--showoverscan] [--constantburn] [--origin Xdelta Ydelta]
-                    [--scale Xfactor Yfactor] [--rotate <default:0>] [--splitfile] [--xmaxtravel <default:300>] [--ymaxtravel <default:400>] [--fan] [-V]
+> svg2gcode --help
+usage: svg2gcode [-h] [--showimage] [--selfcenter] [--pixelsize <default:0.1>] [--imagespeed <default:800>] [--cuttingspeed <default:1000>] [--imagepower <default:300>]
+                    [--poweroffset <default:0>] [--cuttingpower <default:850>] [--passes <default:1>] [--pass_depth <default:0>] [--rapidmove <default:10>] [--noise <default:0>]
+                    [--overscan <default:0>] [--showoverscan] [--constantburn] [--origin delta-x delta-y] [--scale factor-x factor-y] [--rotate <default:0>] [--splitfile] [--pathcut]
+                    [--xmaxtravel <default:300>] [--ymaxtravel <default:400>] [--fan] [-V]
                     svg gcode
 
 Convert svg to gcode for GRBL v1.1 compatible diode laser engravers.
@@ -84,7 +84,7 @@ options:
   --poweroffset <default:0>
                         pixel intensity to laser power: shift power range [0-imagepower]
   --cuttingpower <default:850>
-                        sets laser power of line drawings/cutting
+                        sets laser power of line (path) cutting
   --passes <default:1>  Number of passes (iterations) for line drawings, only active when pass_depth is set
   --pass_depth <default:0>
                         cutting depth in mm for one pass, only active for passes > 1
@@ -101,6 +101,7 @@ options:
                         scale svg with (factor-x,factor-y) (default not set)
   --rotate <default:0>  number of degrees to rotate
   --splitfile           split gcode output of SVG path and image objects
+  --pathcut             alway cut SVG path objects! (use laser power set with option --cuttingpower)
   --xmaxtravel <default:300>
                         machine x-axis lengh in mm
   --ymaxtravel <default:400>
@@ -200,6 +201,14 @@ Change the *style* attribute line - within file *line_hoek.svg* - to the followi
 ```
     style="fill:none;stroke:none;stroke-width:.1"
 ```
+or add 'gcode-pathcut' to the style string: 
+```
+    style="fill:none;stroke:red;stroke-width:.1;gcode-pathcut:true"
+```
+(Note that this makes it possible to selectively cut path objects within the SVG.)
+  
+or add *svg2gcode* option *--pathcut* to override all path stroke attributes within the SVG document
+
 Run *svg2gcode* (with same options) again.
 Now the gcode after conversion will look like this:
 ```

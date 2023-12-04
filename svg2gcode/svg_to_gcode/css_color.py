@@ -3,9 +3,13 @@
     currently only partially implemented
     (definition from  https://www.w3.org/TR/css-color-3/)
 """
-
+import logging
 import math
 import re
+
+logging.basicConfig(format="[%(levelname)s] %(message)s")
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 css_color_keywords = {
     "aliceblue": { "hex": "#F0F8FF", "decimal": [240,248,255] },
@@ -199,7 +203,7 @@ def parse_css_color(color: str) -> [int,int,int]:
     rgbcolor = 0
 
     if color in css_color_keywords:
-        rgbcolor = css_color_keywords["saddlebrown"]["decimal"]
+        rgbcolor = css_color_keywords[color]["decimal"]
     else:
         hexcolor = re.search('#[A-Fa-f0-9]+', color)
         if hexcolor:
@@ -246,6 +250,10 @@ def parse_css_color(color: str) -> [int,int,int]:
 
                     rgbcolor = hsl2rgb(h, s, l)
                     rgbcolor = [int(rgbcolor[0] * 255 * a), int(rgbcolor[1] * 255 * a), int(rgbcolor[2] * 255 * a)]
+
+    if not rgbcolor:
+        logger.warn(f"Not a valid css color: '{color}', color set to 'black'!")
+        rgbcolor = css_color_keywords['black']["decimal"]
 
     return rgbcolor
 
