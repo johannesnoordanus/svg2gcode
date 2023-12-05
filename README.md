@@ -32,7 +32,7 @@ But, see the examples below.
 
 Please consider supporting me, so I can make this application better and add new functionality to it: <http://paypal.me/johannesnoordanus/5,00>
 
-My next update will be a big one, I'll add support for the *fill* attribute of SVG objects.
+My next update will be a major one, I'll add support for the *fill* attribute of SVG objects.
 
 
 To summarize:
