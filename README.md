@@ -27,8 +27,12 @@ See options ```--speedmoves``` and ```--noise``` for example.
 Version 3.0.0 and higher have support for 'stroke' (color) and 'stroke-width' attributes, this means that cutting a path works a bit different now. 
 When the *stroke* attribute of a *path* is nonexistent or set to none, the path will be laser burned with the value set by option *--cuttingpower*.
 
+Also, *svg2gcode* option ```--pathcut``` can be used to override all stroke attributes and force cutting of all *paths* of the SVG.
+But, see the examples below.
+
 Please consider supporting me, so I can make this application better and add new functionality to it: <http://paypal.me/johannesnoordanus/5,00>
-My next update will be a big one, I'll add support for the *fill* attribute.
+
+My next update will be a big one, I'll add support for the *fill* attribute of SVG objects.
 
 
 To summarize:
