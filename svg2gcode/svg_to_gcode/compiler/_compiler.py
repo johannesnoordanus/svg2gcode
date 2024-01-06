@@ -55,7 +55,6 @@ class Compiler:
 
         # Round outputs to the same number of significant figures as the operational tolerance.
         self.precision = abs(round(math.log(TOLERANCES["operation"], 10)))
-        print("precision:", self.precision)
 
         if params is None or not check_setting(params):
             raise ValueError(f"Please set at least 'maximum_laser_power' and 'movement_speed' from {SETTING}")
@@ -552,7 +551,6 @@ class Compiler:
                         inverse_bw = Image2gcode.linear_power(css_color.parse_css_color2bw8(stroke_color), self.settings["maximum_image_laser_power"]) if len(stroke_color) else None
                         self.append_line_chain(line_chain, step, inverse_bw)
 
-            print(type(fill_color))
             if not self.settings["nofill"] and fill_color is not None:
                 # fill a path
                 # this is done in 6 steps:
