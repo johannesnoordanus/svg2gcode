@@ -27,12 +27,16 @@ See options ```--speedmoves``` and ```--noise``` for example.
 Version 3.0.0 and higher have support for 'stroke' (color) and 'stroke-width' attributes, this means that cutting a path works a bit different now. 
 When the *stroke* attribute of a *path* is nonexistent or set to none, the path will be laser burned with the value set by option *--cuttingpower*.
 
+Version 3.1.0 and higher have support for 'fill' (color) and 'fill-rule' attributes. Currently only fill rule 'evenodd' is supported.
+
 Also, *svg2gcode* option ```--pathcut``` can be used to override all stroke attributes and force cutting of all *paths* of the SVG.
-But, see the examples below.
+Option ```--nofill``` (not set by default) is added to disable path fills.
+
+More info (and understanding) can be obtained by looking at the examples below.
 
 Please consider supporting me, so I can make this application better and add new functionality to it: <http://paypal.me/johannesnoordanus/5,00>
 
-My next update will be a major one, I'll add support for the *fill* attribute of SVG objects.
+My next update will add fill-rule 'nonzero'.
 
 
 To summarize:
@@ -110,6 +114,7 @@ options:
   --rotate <default:0>  number of degrees to rotate
   --splitfile           split gcode output of SVG path and image objects
   --pathcut             alway cut SVG path objects! (use laser power set with option --cuttingpower)
+  --nofill              ignore SVG fill attribute
   --xmaxtravel <default:300>
                         machine x-axis lengh in mm
   --ymaxtravel <default:400>
