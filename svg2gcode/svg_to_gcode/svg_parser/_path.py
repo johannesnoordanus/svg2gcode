@@ -261,7 +261,7 @@ class Path:
             radii, center, start_angle, sweep_angle = formulas.endpoint_to_center_parameterization(
                 start, end, radii, rotation_rad, large_arc_flag, sweep_flag)
 
-            arc = EllipticalArc(center, radii, rotation_rad, start_angle, sweep_angle, transformation=self.transformation)
+            arc = EllipticalArc(center, radii, rotation_rad, start_angle, sweep_angle, transformation=self.transformation, path_attrib=self.path_attrib)
 
             self.current_point = end
             return arc

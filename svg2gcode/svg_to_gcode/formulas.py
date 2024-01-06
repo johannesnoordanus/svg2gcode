@@ -11,7 +11,7 @@ from svg2gcode.svg_to_gcode import TOLERANCES
 def tolerance_constrain(value, maximum, minimum, tolerance=TOLERANCES["operation"]):
     """
     Constrain a value between if it surpasses a limit and is within operational tolerance of the limit. Else return the
-    value. Useful if you want to correct for flatting point errors but still want to raise an exception if the value is
+    value. Useful if you want to correct for floating point errors but still want to raise an exception if the value is
     out-of-bounds for a different reason.
     """
 
@@ -49,6 +49,11 @@ def line_intersect(p1, c1, p2, c2):
     return (((c1_c - p1_c) * p1 - (c1 - p1) * p1_c) * (c2 - p2) - ((c2_c - p2_c) * p2 - (c2 - p2) * p2_c) * (
             c1 - p1)) / ((c2 - p2) * (c1_c - p1_c) - (c1 - p1) * (c2_c - p2_c))
 
+def line_length(A: (float,float),B: (float,float)):
+    """ Pythagoras """
+    # |Ax - Bx|^2 + |Ay - By|^2 = C^2
+    # distance = √C^2
+    return math.sqrt((A[0] - B[0])**2 + (A[1] - B[1])**2)
 
 def is_on_mid_perpendicular(z, a, b):
     """Check if a point z is on the line which is perpendicular to ab and passes through the segment's midpoint"""

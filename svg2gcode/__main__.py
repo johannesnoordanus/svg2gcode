@@ -37,7 +37,7 @@ def svg2gcode(args) -> int:
                'maximum_image_laser_power':args.imagepower, 'image_movement_speed':args.imagespeed, 'fan':args.fan,'rapid_move':args.rapidmove,
                'showimage':args.showimage, 'x_axis_maximum_travel':args.xmaxtravel,'y_axis_maximum_travel':args.ymaxtravel, 'image_noise':args.noise,
                'pass_depth':args.pass_depth, 'laser_mode':"constant" if args.constantburn else "dynamic", 'splitfile':args.splitfile, 'pathcut':args.pathcut,
-               'image_poweroffset':args.poweroffset, 'image_overscan':args.overscan, 'image_showoverscan':args.showoverscan})
+               'nofill':args.nofill, 'image_poweroffset':args.poweroffset, 'image_overscan':args.overscan, 'image_showoverscan':args.showoverscan})
 
     compiler = init_compiler(args)
 
@@ -138,6 +138,7 @@ def main() -> int:
         type=int, help="number of degrees to rotate")
     parser.add_argument('--splitfile', action='store_true', default=False, help='split gcode output of SVG path and image objects' )
     parser.add_argument('--pathcut', action='store_true', default=False, help='alway cut SVG path objects! (use laser power set with option --cuttingpower)' )
+    parser.add_argument('--nofill', action='store_true', default=False, help='ignore SVG fill attribute' )
     parser.add_argument('--xmaxtravel', default=cfg["xmaxtravel_default"], metavar="<default:" +str(cfg["xmaxtravel_default"])+ ">",
         type=int, help="machine x-axis lengh in mm")
     parser.add_argument('--ymaxtravel', default=cfg["ymaxtravel_default"], metavar="<default:" +str(cfg["ymaxtravel_default"])+ ">",

@@ -8,12 +8,12 @@ from svg2gcode.svg_to_gcode.geometry import Curve
 class EllipticalArc(Curve):
     """The EllipticalArc class inherits from the abstract Curve class and describes an elliptical arc."""
 
-    __slots__ = 'center', 'radii', 'rotation', 'start_angle', 'sweep_angle', 'end_angle', 'transformation'
+    __slots__ = 'center', 'radii', 'rotation', 'start_angle', 'sweep_angle', 'end_angle', 'transformation', 'path_attrib'
 
     # ToDo apply transformation beforehand (in Path) for consistency with other geometric objects. If you (the reader)
     #  know how to easily apply an affine transformation to an ellipse feel free to make a pull request.
     def __init__(self, center: Vector, radii: Vector, rotation: float, start_angle: float, sweep_angle: float,
-                 transformation: None):
+                 transformation: None, path_attrib = None):
 
         # Assign and verify arguments
         self.center = center
@@ -22,6 +22,7 @@ class EllipticalArc(Curve):
         self.start_angle = start_angle
         self.sweep_angle = sweep_angle
         self.transformation = transformation
+        self.path_attrib = path_attrib
 
         # Calculate missing data
         self.end_angle = start_angle + sweep_angle
@@ -32,7 +33,8 @@ class EllipticalArc(Curve):
 
     def __repr__(self):
         return f"EllipticalArc(start: {self.start}, end: {self.end}, center: {self.center}, radii: {self.radii}," \
-               f" rotation: {self.rotation}, start_angle: {self.start_angle}, sweep_angle: {self.sweep_angle})"
+               f" rotation: {self.rotation}, start_angle: {self.start_angle}, sweep_angle: {self.sweep_angle}," \
+               f" transformation: {self.transformation}, attrib: {self.path_attrib})"
 
     def point(self, t):
         angle = formulas.linear_map(self.start_angle, self.end_angle, t)

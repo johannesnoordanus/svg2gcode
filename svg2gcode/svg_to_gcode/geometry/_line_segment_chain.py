@@ -29,6 +29,65 @@ class LineSegmentChain(Chain):
         self._curves.append(line2)
 
     @staticmethod
+    def clockwise(line_chain, delta: float = .1) -> bool:
+        """
+        Return true when line chain rotates clockwise using sample delta
+
+        """
+        # bbox_line_chain = bbox(line_chain)
+        # bbox_delta_chain = bbox(delta_chain(line_chain, delta))
+        # if bbox_delta_chain > bbox_line_chain:
+        #       return true
+        # return false
+        pass
+
+    @staticmethod
+    def delta_chain(line_chain, offset: float) -> "LineSegmentChain":
+        """
+        Return a line chain offset to the given chain. If the chain rotates clockwise a positive offset
+        results in a delta chain outwards of (enclosing) the given line chain.
+
+        """
+        delta_chain = LineSegmentChain()
+
+        for line in line_chain:
+            line_delta = Line.offset_line(offset, line)
+
+            if delta_chain.chain_size():
+                # calculate intersection of previous line and current line
+                intersect = Line.line_intersection(delta_chain.get(-1), line_delta)
+                if intersect is not None:
+                    # set prev_line.end to intersect
+                    prev_line = delta_chain.get(-1)
+                    prev_line.end = intersect
+                    delta_chain.set(-1, prev_line)
+
+                    # set line_delta start to intersect
+                    line_delta.start = intersect
+                else:
+                    # connect line, to prevent ValueErrors from delta_chain.append() below
+                    line_delta.start = delta_chain.get(-1).end
+
+            delta_chain.append(line_delta)
+
+        # check if line chain is a loop
+        if line_chain.get(0).start == line_chain.get(-1).end:
+            # fix delta chain
+            intersect = Line.line_intersection(delta_chain.get(0), delta_chain.get(-1))
+            if intersect is not None:
+                # update start of loop
+                start_loop = delta_chain.get(0)
+                start_loop.start = intersect
+                delta_chain.set(0, start_loop)
+
+                # update end of loop
+                end_loop = delta_chain.get(-1)
+                end_loop.end = intersect
+                delta_chain.set(-1, end_loop)
+
+        return delta_chain
+
+    @staticmethod
     def line_segment_approximation(shape, increment_growth=11 / 10, error_cap=None, error_floor=None)\
             -> "LineSegmentChain":
         """

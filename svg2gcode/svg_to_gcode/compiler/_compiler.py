@@ -8,6 +8,8 @@ from io import BytesIO
 from typing import Any
 
 import base64
+from PIL import Image
+from skimage.draw import line as drawline
 import numpy as np
 
 from svg2gcode.svg_to_gcode.compiler.interfaces import Interface
@@ -53,6 +55,7 @@ class Compiler:
 
         # Round outputs to the same number of significant figures as the operational tolerance.
         self.precision = abs(round(math.log(TOLERANCES["operation"], 10)))
+        print("precision:", self.precision)
 
         if params is None or not check_setting(params):
             raise ValueError(f"Please set at least 'maximum_laser_power' and 'movement_speed' from {SETTING}")
@@ -210,64 +213,6 @@ class Compiler:
                     file.write((self.gcode_file_header() if len(self.body) == 0 else "") + '\n' +  self.compile_images() + '\n' + self.interface.program_end() + '\n')
                     logger.info(f"Added image(s) to {file_name}")
 
-    def orthogonal_offset(self, offset: float, line: Line) -> Line:
-
-        def offset_direction(line: Line) -> (int,int):
-            d_x = (line.end.x - line.start.x)
-            d_y = (line.end.y - line.start.y)
-            direction = (0,0)
-
-            if d_x > 0 and d_y > 0:
-                direction = (-1,1)
-            elif d_x > 0 and d_y == 0:
-                direction = (0,1)
-            elif d_x < 0 and d_y == 0:
-                direction = (0,-1)
-            elif d_x < 0 and d_y < 0:
-                direction = (1,-1)
-            elif d_x == 0 and d_y < 0:
-                direction = (1,0)
-            elif d_x == 0 and d_y > 0:
-                direction = (-1,0)
-            elif d_x > 0 and d_y < 0:
-                direction = (1,1)
-            elif d_x < 0 and d_y > 0:
-                direction = (-1,-1)
-
-            return direction
-
-        delta_sign = offset_direction(line)
-
-        # calculate ortogonal line vector((0,0),(delta_x,delta_y)) of 'offset' length:
-        # (1)  y = 1/slope * x
-        #
-        # of length offset:
-        # (2)  x^2 + y^2                = offset^2     (Pythagoras)
-        # (3)  x^2 + (1/slope * x)^2    = offset^2
-        # (4)  (1 + (1/slope)^2) * x^2  = offset^2
-        # (5)  x^2 = offset^2 / (1 + (1/slope)^2)
-
-        if line.slope == 0:
-            # vertical line
-            delta_x = 0
-            delta_y = delta_sign[1] * offset
-        elif line.slope == 1:
-            # horizontal line
-            delta_x = delta_sign[0] * offset
-            delta_y = 0
-        else:
-            # slope
-            inv_slope = abs((1/line.slope))
-            delta_x = round(math.sqrt((offset ** 2) / (1 + inv_slope ** 2)), self.precision)
-            delta_y = round(inv_slope * delta_x, self.precision)
-
-            # set right direction
-            delta_x = delta_sign[0] * (-1 if (offset < 0) else 1) * delta_x
-            delta_y = delta_sign[1] * (-1 if (offset < 0) else 1) * delta_y
-
-        # add delta vector to line start and end vectors
-        return Line(line.start + Vector(delta_x, delta_y), line.end + Vector(delta_x, delta_y), "offset")
-
     def append_line_chain(self, line_chain: LineSegmentChain, step: float, color: int = None):
         """
         Draws a LineSegmentChain by calling interface.linear_move() for each segment. The resulting code is appended to
@@ -400,38 +345,6 @@ class Compiler:
 
         return None
 
-    def distance(self, A: (float,float),B: (float,float)):
-        """
-        Pythagoras
-        """
-        # |Ax - Bx|^2 + |Ay - By|^2 = C^2
-        # distance = √C^2
-        return math.sqrt(abs(A[0] - B[0])**2 + abs(A[1] - B[1])**2)
-
-    def line_intersection(self, l1: Line, l2:Line) -> Vector:
-        """
-        Line intersection (https://en.wikipedia.org/wiki/Line–line_intersection)
-        """
-        x1, y1 = l1.start
-        x2, y2 = l1.end
-        x3, y3 = l2.start
-        x4, y4 = l2.end
-
-        # denomintor
-        d = round((x1 - x2)*(y3 - y4) - (y1 - y2)*(x3 - x4), self.precision)
-
-        # Note that the cutoff below is needed to eliminate line artifacts (spikes) of the render result.
-        # This is due to calculation (precision) errors resulting in the y coordinate of the intersection to
-        # be off by a factor (2,3, 10?). It might be that the rounding applied here is not correct, or/and
-        # that the equations are inherently sensitive to rounding errors at certain inputs.
-        # TODO: analize this
-        if abs(d) < 0.01:
-            # no intersection
-            return None
-
-        return Vector( round(((x1*y2 - y1*x2) * (x3 - x4) - (x1 - x2) * (x3*y4 - y3*x4))/d, self.precision),
-                       round(((x1*y2 - y1*x2) * (y3 - y4) - (y1  - y2) * (x3*y4 - y3*x4))/d, self.precision) )
-
     def image2gcode(self, img_attrib: dict[str, Any], img=None, transformation = None):
 
         # create image conversion object
@@ -535,7 +448,17 @@ class Compiler:
         """
         Draws curves.
         """
+
+        def draw_line(img: np.array, p1: (int,int), p2: (int,int), gray: int):
+            """
+            Draws a line.
+            """
+            pixel = 1/self.settings["pixel_size"]
+            yy, xx = drawline(int(p1[1]*pixel),int(p1[0]*pixel),int(p2[1]*pixel),int(p2[0]*pixel))
+            img[yy,xx] = gray
+
         path_curves = {}
+        pixel_size = float(self.settings["pixel_size"])
 
         for curve in curves:
             if isinstance(curve, RasterImage):
@@ -554,7 +477,7 @@ class Compiler:
 
                 curve_name_id = ""
                 # parse id
-                if curve.path_attrib:
+                if curve.path_attrib and 'id' in curve.path_attrib:
                     curve_name_id = curve.path_attrib['id']
 
                 if curve_name_id not in path_curves:
@@ -572,19 +495,24 @@ class Compiler:
                     # add line segments to curves having this id
                     path_curves[curve_name_id].append(line_chain)
 
+            #image = np.full([int(6) * 11, int(6) * 11], 255, dtype=np.uint8)
+
+        # default stroke width is one line (thickness)
+        stroke_width = pixel_size
+
         # emit all paths (organized by name id)
         for name_id in path_curves:
-            # for all line chains
+            steps = []
+            fill_color = None
+            fill_rule = None
             for line_chain in path_curves[name_id]:
 
-                pixel_size = float(self.settings["pixel_size"])
                 # default stroke width is one line (thickness)
-                stroke_width = pixel_size
-
-                first_line_of_chain = line_chain.get(0)
-
                 width = 0
                 stroke_color = ""
+
+                # get style info for this line chain (of object 'name_id')
+                first_line_of_chain = line_chain.get(0)
                 style = self.parse_style_attribute(first_line_of_chain)
                 if style:
                     if not (style['pathcut'] == 'true' or self.settings["pathcut"]) \
@@ -592,62 +520,291 @@ class Compiler:
                         stroke_color = style['stroke']
                     if style['stroke-width'] is not None and style['stroke-width'] != "none":
                         stroke_width = float(style['stroke-width'])
-                        width = int(round(stroke_width/pixel_size, self.precision))
+                        width = math.ceil(round(stroke_width/pixel_size, self.precision)/2)
+                    if style['fill'] is not None:
+                        fill_color = css_color.parse_css_color2bw8(style['fill'])
+                        if style['fill-rule'] is not None:
+                            fill_rule = style['fill-rule']
+                            if fill_rule == "nonzero":
+                                logger.warn(f"fill-rule 'nonzero' of object '{name_id}' is currently unsupported!")
 
+                # get steps (offsets) for the lines that make the border
                 steps = [0]
                 if len(stroke_color) and width:
                     for delta in range(width):
                         if delta:
                             steps.append(round(delta * pixel_size, self.precision))
-                            if not (delta + 1 == width and width % 2 == 0):
+                            if not (delta == width and width % 2 != 0):
                                 steps.append(round(-delta * pixel_size, self.precision))
+                max_step = max(steps)
 
+                # render svg stroke (of size width)
+                # (draw smooth border outlines in gcode)
+                # note that this updates the boundingbox
+                self.body.extend([f"\n; border: '{name_id}'"])
                 for step in steps:
                     if step:
-                        delta_chain = LineSegmentChain()
-
-                        for line in line_chain:
-                            line_delta = self.orthogonal_offset(step, line)
-
-                            if delta_chain.chain_size():
-                                # calculate intersection of previous line and current line
-                                intersect = self.line_intersection(delta_chain.get(-1), line_delta)
-                                large = 200
-                                if intersect is not None:
-                                    # set prev_line.end to intersect
-                                    prev_line = delta_chain.get(-1)
-                                    prev_line.end = intersect
-                                    delta_chain.set(-1, prev_line)
-
-                                    # set line_delta start to intersect
-                                    line_delta.start = intersect
-                                else:
-                                    # connect line, to prevent ValueErrors from delta_chain.append() below
-                                    line_delta.start = delta_chain.get(-1).end
-
-                            delta_chain.append(line_delta)
-
-                        # check if line chain is a loop
-                        if line_chain.get(0).start == line_chain.get(-1).end:
-                            # fix delta chain
-                            intersect = self.line_intersection(delta_chain.get(0), delta_chain.get(-1))
-                            if intersect is not None:
-                                # update start of loop
-                                start_loop = delta_chain.get(0)
-                                start_loop.start = intersect
-                                delta_chain.set(0, start_loop)
-
-                                # update end of loop
-                                end_loop = delta_chain.get(-1)
-                                end_loop.end = intersect
-                                delta_chain.set(-1, end_loop)
-
+                        delta_chain = LineSegmentChain.delta_chain(line_chain, step)
                         # linear_power(self, pixel: UInt8, maxpower: int, offset: int = 0, invert: bool = True) -> int
                         inverse_bw = Image2gcode.linear_power(css_color.parse_css_color2bw8(stroke_color), self.settings["maximum_image_laser_power"])
                         self.append_line_chain(delta_chain, step, inverse_bw)
                     else:
                         inverse_bw = Image2gcode.linear_power(css_color.parse_css_color2bw8(stroke_color), self.settings["maximum_image_laser_power"]) if len(stroke_color) else None
                         self.append_line_chain(line_chain, step, inverse_bw)
+
+            print(type(fill_color))
+            if not self.settings["nofill"] and fill_color is not None:
+                # fill a path
+                # this is done in 6 steps:
+                # step 1: create two raster images matching the bbox
+                # step 2: add marker lines just inside the line chains of the path
+                # step 3: scan the marker image lines and and apply 'evenodd' fill
+                #         (fill rule 'nonzero' to be implemented later on see note below)
+                # step 4: draw white borders to erase fill overlap
+                # step 5: filter stray pixels (to remove noise from the action above)
+                # step 6: generate gcode from image_fill
+
+                # get bounding box info from the path border
+                lowerleft = self.boundingbox.get()[0]
+                upperright = self.boundingbox.get()[1]
+
+                # normalize origin to (0.0)
+                vdXY = Vector(-lowerleft.x, -lowerleft.y)
+                dXY = (-lowerleft.x, -lowerleft.y)
+
+                # get raster image dimensions
+                img_height = math.ceil((upperright.y - lowerleft.y + abs(dXY[1]))/pixel_size)
+                img_width = math.ceil((upperright.x - lowerleft.x + abs(dXY[1]))/pixel_size)
+
+                # step 1: create two raster images matching the bbox
+                #image_mark = np.full([int(upperright.y) * int(1/pixel_size) + 20, int(upperright.x) * int(1/pixel_size) + 20], 255, dtype=np.uint8)
+                #image_fill = np.full([int(upperright.y) * int(1/pixel_size) + 20, int(upperright.x) * int(1/pixel_size) + 20], 255, dtype=np.uint8)
+                # init
+                image_mark = np.full([img_height + 1, img_width + 1], 255, dtype=np.uint8)
+                image_fill = np.full([img_height + 1, img_width + 1], 255, dtype=np.uint8)
+
+                # default scan error (step 3 below)
+                scan_error = 2
+
+                # step 2: add marker lines just inside the line chains of the path
+                # - determine the inside of the line chain
+                # - draw marker lines
+                for line_chain in path_curves[name_id]:
+
+                    # - determine the inside of the line chain
+                    # Compare the bbox of the line chain with that of a delta line chain a
+                    # fixed distance (offset) from the base line chain. Initially we do not know if the
+                    # delta line chain is inside or outside the base line chain, but when we compare
+                    # the bbox sizes we know.
+                    # Note that this method can be used to determine if a line chain is drawn clockwise
+                    # or anti-clockwise because a posive delta offset should be 'outside' the line chain
+                    # in this case (depending on the definition/calculation of the delta function).
+                    # we can use this to implement the other svg fill rule: 'nonzero'.
+                    boundingbox = Boundingbox()
+                    for line in line_chain:
+                        boundingbox.update(line.start + vdXY)
+                        boundingbox.update(line.end + vdXY)
+                    bbox_size = boundingbox.size()
+
+                    boundingbox = Boundingbox()
+                    delta_chain = LineSegmentChain.delta_chain(line_chain, pixel_size * 2)
+                    for line in delta_chain:
+                        boundingbox.update(line.start + vdXY)
+                        boundingbox.update(line.end + vdXY)
+                    bbox_deltasize =  boundingbox.size()
+
+                    # compare bboxes and set inside offset
+                    inside = 1
+                    if bbox_deltasize > bbox_size:
+                        inside = -1
+
+                    # Note that some tuning is going on here.
+                    # This can be remmidied in several ways:
+                    # - use draw lines that have a thickness
+                    # - use a higher resolution (pixel grid) to reduce the 'rounding' errors
+                    offsets = [inside * .5 * pixel_size, inside * pixel_size, inside * 1.5 * pixel_size, inside * 2 * pixel_size]
+                    if bbox_size < 50:
+                        # small area, less margin for error
+                        scan_error = 1
+                        del offsets[-2:]
+
+                    ## direct gcode: update this, see step 3 note
+                    # draw border lines of a specific marker color within line chain
+                    # Note that the marker values are just a choice and only have to be consistent
+                    # with the algorithm used (step 3)
+                    for offset in offsets:
+                        # make a line chain just one pixel inside the base (step 0) line chain
+                        delta_chain = LineSegmentChain.delta_chain(line_chain, offset)
+                        for line in delta_chain:
+                            draw_line(image_mark, line.start + vdXY, line.end + vdXY, 128)
+
+                    # draw the line chain border using another marker color
+                    for line in line_chain:
+                        draw_line(image_mark, line.start + vdXY, line.end + vdXY, 10)
+
+                # step 3: scan the marker image lines and and apply 'evenodd' fill
+                #         (fill rule 'nonzero' to be implemented later on)
+                #    for each line (y):
+                #        for each point (x) on the line:
+                #           scan from left to right or reverse:
+                #               for markers (border,inside border) and apply rule
+                #               'evenodd' to fill when an even number of borders
+                #               is crossed, untill odd
+                # Note that the image 'image_fill' is filled not 'image_mark' to make sure marks stay in place.
+
+                # Note that the fill algorithm can be adapted to support direct rendering of gcode (instead of rendering via 'image_fill' and
+                # function 'image2gcode', converting a raster image to gcode). This reduces the number of steps needed: steps 4, 5 and 6 can
+                # be left out. It does need a few adaptions in the previous steps, namely drawing the line chain border (color '10') in full width
+                # (instead of 1 pixel) and draw the 'inside' line (color 128) one pixel further. In addition to this uncomment the '## direct gcode'
+                # lines of step 3 to activate gcode rendering.
+
+                ## direct gcode
+                ## code = [f"\n; fill '{name_id}'"]
+                ## code += [self.interface.set_laser_power_value(Image2gcode.linear_power(fill_color, self.settings["maximum_image_laser_power"]))]
+
+                go_right = True
+                # start scanning to the right
+                for y in range(image_mark.shape[0]):
+                    evenodd = 0
+
+                    if go_right:
+                        # scan to the right
+                        x = 0
+                        start = None
+                        while x < image_mark.shape[1]:
+                            if image_mark[y,x] == 10 :
+                                # found a border
+                                x_b = x
+                                ## direct gcode
+                                ## update line below, to be able to skip empty (value 255) pixels
+                                # scan border, possibly having multiple pixels.
+                                while x_b < image_mark.shape[1] and image_mark[y,x_b] == 10:
+                                    x_b += 1
+
+                                xscan_b = x - 1
+                                while xscan_b > 0 and xscan_b > (x - scan_error) and (image_mark[y,xscan_b] != 10 and image_mark[y,xscan_b] != 128):
+                                    xscan_b -= 1
+                                xscan_a = x_b
+                                while xscan_a < image_mark.shape[1] and xscan_a < x_b + scan_error and (image_mark[y,xscan_a] != 10 and image_mark[y,xscan_a] != 128):
+                                    xscan_a += 1
+
+                                if xscan_b >= 0 and image_mark[y,xscan_b] == 128:
+                                    # found border
+                                    if evenodd % 2 == 0:
+                                        start = (x * pixel_size, y * pixel_size)
+                                        ## direct gcode
+                                        ## code += [self.interface.rapid_move(start[0] - dXY[0], start[1] - dXY[1])]
+                                    else:
+                                        draw_line(image_fill, start + dXY, (x * pixel_size, y * pixel_size) + dXY, fill_color)
+                                        ## direct gcode
+                                        ## code += [self.interface.linear_move(x * pixel_size - dXY[0], y * pixel_size - dXY[1])]
+                                    evenodd = evenodd + 1
+                                if xscan_a < image_mark.shape[1] and image_mark[y,xscan_a] == 128:
+                                    # found border
+                                    if evenodd % 2 == 0:
+                                        start = (x * pixel_size, y * pixel_size)
+                                        ## direct gcode
+                                        ## code += [self.interface.rapid_move(start[0] - dXY[0], start[1] - dXY[1])]
+                                    else:
+                                        draw_line(image_fill, start + dXY, (x_b * pixel_size, y * pixel_size) + dXY, fill_color)
+                                        ## direct gcode
+                                        ## code += [self.interface.linear_move(x_b * pixel_size - dXY[0], y * pixel_size - dXY[1])]
+                                    evenodd = evenodd + 1
+                                if x_b > x:
+                                    x = x_b - 1
+                            x += 1
+                    else:
+                        # scan to the left
+                        start = None
+                        x = image_mark.shape[1] - 1
+                        while x >= 0:
+                            if image_mark[y,x] == 10:
+                                # found a border
+                                ## direct gcode
+                                ## update line below, to be able to skip empty (value 255) pixels
+                                # scan border, possibly having multiple pixels.
+                                x_b = x
+                                while x_b >= 0 and image_mark[y,x_b] == 10:
+                                    x_b -= 1
+
+                                xscan_b = x_b
+                                while xscan_b > 0 and xscan_b > (x_b - scan_error) and (image_mark[y,xscan_b] != 10 and image_mark[y,xscan_b] != 128):
+                                     xscan_b -= 1
+                                xscan_a = x + 1
+                                while xscan_a < image_mark.shape[1] and xscan_a < (x + scan_error) and (image_mark[y,xscan_a] != 10 and image_mark[y,xscan_a] != 128):
+                                    xscan_a += 1
+
+                                if xscan_a < image_mark.shape[1] and image_mark[y,xscan_a] == 128:
+                                    # found border
+                                    if evenodd % 2 == 0:
+                                        start = (x * pixel_size, y * pixel_size)
+                                        ## direct gcode
+                                        ## code += [self.interface.rapid_move(start[0] - dXY[0], start[1] - dXY[1])]
+                                    else:
+                                        draw_line(image_fill, start + dXY, (x * pixel_size, y * pixel_size) + dXY, fill_color)
+                                        ## direct gcode
+                                        ## code += [self.interface.linear_move(x * pixel_size - dXY[0], y * pixel_size - dXY[1])]
+                                    evenodd = evenodd + 1
+                                if xscan_b >= 0 and image_mark[y,xscan_b] == 128:
+                                    # found border
+                                    if evenodd % 2 == 0:
+                                        start = (x * pixel_size, y * pixel_size)
+                                        ## direct gcode
+                                        ## code += [self.interface.rapid_move(start[0] - dXY[0], start[1] - dXY[1])]
+                                    else:
+                                        draw_line(image_fill, start + dXY, (x_b * pixel_size, y * pixel_size) + dXY, fill_color)
+                                        ## direct gcode
+                                        ## code += [self.interface.linear_move(x_b * pixel_size - dXY[0], y * pixel_size - dXY[1])]
+                                    evenodd = evenodd + 1
+                                if x_b < x:
+                                    x = x_b + 1
+                            x -= 1
+
+                    # switch scan direction
+                    go_right = not go_right
+
+                ## direct gcode
+                ## self.body.extend(code)
+
+                ## direct gcode: ignore this step
+                # step 4: draw white borders to erase fill overlap
+                for line_chain in path_curves[name_id]:
+                    for step in steps:
+                        if step:
+                            delta_chain = LineSegmentChain.delta_chain(line_chain, step)
+                            for line in delta_chain:
+                                draw_line(image_fill, line.start + vdXY, line.end + vdXY, 255)
+                        else:
+                            for line in line_chain:
+                                draw_line(image_fill, line.start + vdXY, line.end + vdXY, 255)
+
+                ## direct gcode: ignore this step
+                # step 5: filter stray pixels (to remove noise from the action above)
+                for y in range(image_fill.shape[0]):
+                    for x in range(image_fill.shape[1]):
+                        if image_fill[y,x] != 255:
+                            if x > 1 and x < (image_fill.shape[1] - 1) and y > 1 and y < (image_fill.shape[0] - 1):
+                                if image_fill[y,x+1] == 255 and image_fill[y,x-1] == 255 and image_fill[y+1,x] == 255 and image_fill[y-1,x] == 255:
+                                    image_fill[y,x] = 255
+
+                # TODO: remove
+                pic = Image.fromarray(image_mark)
+                pic.show()
+                pic = Image.fromarray(image_fill)
+                pic.show()
+
+                ## direct gcode: ignore this step
+                # step 6: generate gcode from image_fill
+                img_attrib = {}
+                img_attrib['id'] = name_id
+                #img_attrib['gcode_speedmoves'] = 0
+                img_attrib['x'] = -dXY[0]
+                img_attrib['y'] = -dXY[1]
+
+                ## direct gcode: ignore this step
+                # start gcode fill
+                self.body.extend([f"\n;fill '{name_id}'"])
+                self.image2gcode(img_attrib, image_fill)
 
     def check_axis_maximum_travel(self):
         return self.settings["x_axis_maximum_travel"] is not None and self.settings["y_axis_maximum_travel"] is not None
