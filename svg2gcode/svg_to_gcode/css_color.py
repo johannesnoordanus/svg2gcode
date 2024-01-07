@@ -192,7 +192,7 @@ def hex2rgb(hexcolor: str) -> [int,int,int]:
 
     return [r,g,b]
 
-def parse_css_color(color: str) -> [int,int,int]:
+def parse_css_color(color: str) -> [int,int,int,float]:
     """
         parse css color to rgb
         (definition from  https://www.w3.org/TR/css-color-3/)
@@ -229,7 +229,8 @@ def parse_css_color(color: str) -> [int,int,int]:
                 else:
                     b = int(rgb[commas_pos[1]+1:])
 
-                rgbcolor = [r * a, g * a, b * a]
+                #rgbcolor = [r * a, g * a, b * a]
+                rgbcolor = [r,g,b,a]
 
             else:
                 hsla = re.search(f"hsl(a)?\([0-9]+,[0-9]+,[0-9]+(,{float_re})?", color)
@@ -249,7 +250,7 @@ def parse_css_color(color: str) -> [int,int,int]:
                         l = int(hsl[commas_pos[1]+1:])
 
                     rgbcolor = hsl2rgb(h, s, l)
-                    rgbcolor = [int(rgbcolor[0] * 255 * a), int(rgbcolor[1] * 255 * a), int(rgbcolor[2] * 255 * a)]
+                    rgbcolor = [int(rgbcolor[0] * 255), int(rgbcolor[1] * 255), int(rgbcolor[2] * 255), a]
 
     if not rgbcolor:
         logger.warn(f"Not a valid css color: '{color}', color set to 'black'!")
@@ -267,7 +268,7 @@ def rgb24tobw24(rgb24: int) -> int:
     bnw = int(r * 0.299 + g * 0.587 + b * 0.114) & 0xff;
     return (bnw << 16) | (bnw << 8) | bnw;
 
-def rgb24tobw8(rgb24: [int,int,int]) -> int:
+def rgb24tobw8(rgb24: [int,int,int,float]) -> int:
     """
         convert a 24 bit rgb (color) value to 8 bit grayscale
     """

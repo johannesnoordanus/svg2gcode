@@ -32,11 +32,11 @@ Version 3.1.0 and higher have support for 'fill' (color) and 'fill-rule' attribu
 Also, *svg2gcode* option ```--pathcut``` can be used to override all stroke attributes and force cutting of all *paths* of the SVG.
 Option ```--nofill``` (not set by default) is added to disable path fills.
 
-More info (and understanding) can be obtained by looking at the examples below.
+More info can be obtained by looking at the examples below.
 
 Please consider supporting me, so I can make this application better and add new functionality to it: <http://paypal.me/johannesnoordanus/5,00>
 
-My next update will add fill-rule 'nonzero'.
+My next update will add/fix opacity (this does not work currently). Later on I will add fill-rule 'nonzero'.
 
 
 To summarize:

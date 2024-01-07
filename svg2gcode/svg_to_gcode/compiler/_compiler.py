@@ -389,7 +389,7 @@ class Compiler:
         for example "fill:#F4CF84;fill-rule:evenodd;stroke:#D07735;"
         """
 
-        style = {'fill' : None, 'fill-rule': None, 'stroke': None, 'stroke-width': None, 'pathcut': None}
+        style = {'fill' : None, 'fill-rule': None, 'fill-opacity': None, 'stroke': None, 'stroke-width': None, 'pathcut': None}
 
         # parse style attribute
 
@@ -406,6 +406,11 @@ class Compiler:
                 fill_rule = re.search('fill-rule:#(evenodd|nonzero)',style_str)
                 if fill_rule:
                     style['fill-rule'] = re.search('(evenodd|nonzero)', fill_rule.group(0)).group(0)
+            # parse fill-opacity
+            if 'fill-opacity' in style_str:
+                fill_opacity = re.search('fill-opacity:(\d*\.)?\d+',style_str)
+                if fill_opacity:
+                    style['fill-opacity'] = re.search('(\d*\.)?\d+', fill_opacity.group(0)).group(0)
             # parse stroke
             if 'stroke' in style_str:
                 stroke = re.search('stroke:[^;]+;',style_str)
@@ -430,13 +435,17 @@ class Compiler:
             style['fill'] = curve.path_attrib['fill']
         if 'fill-rule' in curve.path_attrib:
             style['fill-rule'] = curve.path_attrib['fill-rule']
+        # parse fill-opacity
+        if 'fill-opacity' in curve.path_attrib:
+            fill_opacity = re.search('fill-opacity:(\d*\.)?\d+',curve.path_attrib)
+            if fill_opacity:
+                style['fill-opacity'] = re.search('(\d*\.)?\d+', fill_opacity.group(0)).group(0)
         # parse stroke attribute
         if 'stroke' in curve.path_attrib:
             style['stroke'] = curve.path_attrib['stroke']
         # parse stroke-width attribute
         if 'stroke-width' in curve.path_attrib:
             style['stroke-width'] = curve.path_attrib['stroke-width']
-
         # parse gcode_pathcut attribute
         if 'gcode_pathcut' in curve.path_attrib:
             style['pathcut'] = curve.path_attrib['gcode_pathcut']
@@ -494,8 +503,6 @@ class Compiler:
                     # add line segments to curves having this id
                     path_curves[curve_name_id].append(line_chain)
 
-            #image = np.full([int(6) * 11, int(6) * 11], 255, dtype=np.uint8)
-
         # default stroke width is one line (thickness)
         stroke_width = pixel_size
 
@@ -504,6 +511,8 @@ class Compiler:
             steps = []
             fill_color = None
             fill_rule = None
+            # set a boundingbox per 'name_id'
+            boundingbox = Boundingbox()
             for line_chain in path_curves[name_id]:
 
                 # default stroke width is one line (thickness)
@@ -526,6 +535,12 @@ class Compiler:
                             fill_rule = style['fill-rule']
                             if fill_rule == "nonzero":
                                 logger.warn(f"fill-rule 'nonzero' of object '{name_id}' is currently unsupported!")
+                        if style['fill-opacity'] is not None:
+                            # Note that opacity does not work yet (TODO)
+                            alpha = float(style['fill-opacity'])
+                            if not (alpha >=0 and alpha <= 1):
+                                logger.warn(f"Opacity value '{alpa}' should be in range [0.0..1.0]!")
+                                fill_color = 255
 
                 # get steps (offsets) for the lines that make the border
                 steps = [0]
@@ -535,21 +550,29 @@ class Compiler:
                             steps.append(round(delta * pixel_size, self.precision))
                             if not (delta == width and width % 2 != 0):
                                 steps.append(round(-delta * pixel_size, self.precision))
-                max_step = max(steps)
 
                 # render svg stroke (of size width)
                 # (draw smooth border outlines in gcode)
-                # note that this updates the boundingbox
+                # Note the update of the boundingbox.
                 self.body.extend([f"\n; border: '{name_id}'"])
                 for step in steps:
                     if step:
                         delta_chain = LineSegmentChain.delta_chain(line_chain, step)
-                        # linear_power(self, pixel: UInt8, maxpower: int, offset: int = 0, invert: bool = True) -> int
+                        # Note that opacity does not work yet (TODO)
                         inverse_bw = Image2gcode.linear_power(css_color.parse_css_color2bw8(stroke_color), self.settings["maximum_image_laser_power"])
                         self.append_line_chain(delta_chain, step, inverse_bw)
+                        # update 'name_id' boundingbox
+                        for line in delta_chain:
+                            boundingbox.update(line.start)
+                            boundingbox.update(line.end)
                     else:
+                        # Note that opacity does not work yet (TODO)
                         inverse_bw = Image2gcode.linear_power(css_color.parse_css_color2bw8(stroke_color), self.settings["maximum_image_laser_power"]) if len(stroke_color) else None
                         self.append_line_chain(line_chain, step, inverse_bw)
+                        # update 'name_id' boundingbox
+                        for line in line_chain:
+                            boundingbox.update(line.start)
+                            boundingbox.update(line.end)
 
             if not self.settings["nofill"] and fill_color is not None:
                 # fill a path
@@ -563,31 +586,33 @@ class Compiler:
                 # step 6: generate gcode from image_fill
 
                 # get bounding box info from the path border
-                lowerleft = self.boundingbox.get()[0]
-                upperright = self.boundingbox.get()[1]
+                lowerleft = boundingbox.get()[0]
+                upperright = boundingbox.get()[1]
 
                 # normalize origin to (0.0)
                 vdXY = Vector(-lowerleft.x, -lowerleft.y)
                 dXY = (-lowerleft.x, -lowerleft.y)
 
                 # get raster image dimensions
-                img_height = math.ceil((upperright.y - lowerleft.y + abs(dXY[1]))/pixel_size)
-                img_width = math.ceil((upperright.x - lowerleft.x + abs(dXY[1]))/pixel_size)
-
-                # step 1: create two raster images matching the bbox
-                #image_mark = np.full([int(upperright.y) * int(1/pixel_size) + 20, int(upperright.x) * int(1/pixel_size) + 20], 255, dtype=np.uint8)
-                #image_fill = np.full([int(upperright.y) * int(1/pixel_size) + 20, int(upperright.x) * int(1/pixel_size) + 20], 255, dtype=np.uint8)
-                # init
-                image_mark = np.full([img_height + 1, img_width + 1], 255, dtype=np.uint8)
-                image_fill = np.full([img_height + 1, img_width + 1], 255, dtype=np.uint8)
+                img_height = math.ceil((upperright.y - lowerleft.y)/pixel_size)
+                img_width = math.ceil((upperright.x - lowerleft.x)/pixel_size)
 
                 # default scan error (step 3 below)
-                scan_error = 2
+                scan_error = 4
+
+                # step 1: create two raster images matching the bbox
+                # init
+                image_mark = np.full([img_height + 1, img_width + scan_error], 255, dtype=np.uint8)
+                image_fill = np.full([img_height + 1, img_width + scan_error], 255, dtype=np.uint8)
 
                 # step 2: add marker lines just inside the line chains of the path
                 # - determine the inside of the line chain
                 # - draw marker lines
                 for line_chain in path_curves[name_id]:
+                    # Note that a svg object with a specific name_id can have multiple line_chains that
+                    # together, define one shape (circumference). When this the case the boundingbox
+                    # inside/outside method below is not fullproof. This can be solved to stitch together
+                    # the line chain parts (TODO)
 
                     # - determine the inside of the line chain
                     # Compare the bbox of the line chain with that of a delta line chain a
@@ -598,18 +623,18 @@ class Compiler:
                     # or anti-clockwise because a posive delta offset should be 'outside' the line chain
                     # in this case (depending on the definition/calculation of the delta function).
                     # we can use this to implement the other svg fill rule: 'nonzero'.
-                    boundingbox = Boundingbox()
+                    bbox = Boundingbox()
                     for line in line_chain:
-                        boundingbox.update(line.start + vdXY)
-                        boundingbox.update(line.end + vdXY)
-                    bbox_size = boundingbox.size()
+                        bbox.update(line.start + vdXY)
+                        bbox.update(line.end + vdXY)
+                    bbox_size = bbox.size()
 
-                    boundingbox = Boundingbox()
+                    bbox = Boundingbox()
                     delta_chain = LineSegmentChain.delta_chain(line_chain, pixel_size * 2)
                     for line in delta_chain:
-                        boundingbox.update(line.start + vdXY)
-                        boundingbox.update(line.end + vdXY)
-                    bbox_deltasize =  boundingbox.size()
+                        bbox.update(line.start + vdXY)
+                        bbox.update(line.end + vdXY)
+                    bbox_deltasize =  bbox.size()
 
                     # compare bboxes and set inside offset
                     inside = 1
@@ -617,11 +642,14 @@ class Compiler:
                         inside = -1
 
                     # Note that some tuning is going on here.
-                    # This can be remmidied in several ways:
-                    # - use draw lines that have a thickness
+                    # This can be remedied in several ways:
+                    # - use draw lines that have a thickness?
                     # - use a higher resolution (pixel grid) to reduce the 'rounding' errors
                     offsets = [inside * .5 * pixel_size, inside * pixel_size, inside * 1.5 * pixel_size, inside * 2 * pixel_size]
-                    if bbox_size < 50:
+                    # Note that the system sometimes returns line_chains having 1 point and thus having no size, this is 'solved'
+                    # below, but should not happen (TODO). It is also assumed that line_chain parts that define one shape have
+                    # similar sizes (TODO).
+                    if bbox_size > 1 and bbox_size < 50:
                         # small area, less margin for error
                         scan_error = 1
                         del offsets[-2:]
@@ -630,11 +658,12 @@ class Compiler:
                     # draw border lines of a specific marker color within line chain
                     # Note that the marker values are just a choice and only have to be consistent
                     # with the algorithm used (step 3)
-                    for offset in offsets:
-                        # make a line chain just one pixel inside the base (step 0) line chain
-                        delta_chain = LineSegmentChain.delta_chain(line_chain, offset)
-                        for line in delta_chain:
-                            draw_line(image_mark, line.start + vdXY, line.end + vdXY, 128)
+                    if bbox_size > 1:
+                        for offset in offsets:
+                            # make a line chain just one pixel inside the base (step 0) line chain
+                            delta_chain = LineSegmentChain.delta_chain(line_chain, offset)
+                            for line in delta_chain:
+                                draw_line(image_mark, line.start + vdXY, line.end + vdXY, 128)
 
                     # draw the line chain border using another marker color
                     for line in line_chain:
@@ -683,7 +712,7 @@ class Compiler:
                                 while xscan_b > 0 and xscan_b > (x - scan_error) and (image_mark[y,xscan_b] != 10 and image_mark[y,xscan_b] != 128):
                                     xscan_b -= 1
                                 xscan_a = x_b
-                                while xscan_a < image_mark.shape[1] and xscan_a < x_b + scan_error and (image_mark[y,xscan_a] != 10 and image_mark[y,xscan_a] != 128):
+                                while xscan_a < image_mark.shape[1] and xscan_a < (x_b + scan_error) and (image_mark[y,xscan_a] != 10 and image_mark[y,xscan_a] != 128):
                                     xscan_a += 1
 
                                 if xscan_b >= 0 and image_mark[y,xscan_b] == 128:
@@ -784,12 +813,6 @@ class Compiler:
                             if x > 1 and x < (image_fill.shape[1] - 1) and y > 1 and y < (image_fill.shape[0] - 1):
                                 if image_fill[y,x+1] == 255 and image_fill[y,x-1] == 255 and image_fill[y+1,x] == 255 and image_fill[y-1,x] == 255:
                                     image_fill[y,x] = 255
-
-                # TODO: remove
-                pic = Image.fromarray(image_mark)
-                pic.show()
-                pic = Image.fromarray(image_fill)
-                pic.show()
 
                 ## direct gcode: ignore this step
                 # step 6: generate gcode from image_fill
