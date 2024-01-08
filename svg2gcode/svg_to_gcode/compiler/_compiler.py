@@ -344,10 +344,10 @@ class Compiler:
 
         return None
 
-    def image2gcode(self, img_attrib: dict[str, Any], img=None, transformation = None):
+    def image2gcode(self, img_attrib: dict[str, Any], img=None, transformation = None, power = None):
 
         # create image conversion object
-        convert = Image2gcode(transformation = transformation.apply_affine_transformation if transformation is not None else None)
+        convert = Image2gcode(transformation = transformation.apply_affine_transformation if transformation is not None else None, power = power)
 
         #
         # set arguments
@@ -365,6 +365,7 @@ class Compiler:
         arguments["showoverscan"] = img_attrib['gcode_showoverscan'] if 'gcode_showoverscan' in img_attrib else self.settings["image_showoverscan"]
         arguments["offset"] = (float(img_attrib['x']), float(img_attrib['y']))
         arguments["name"] = img_attrib['id']
+        arguments["noinvert"] = img_attrib['noinvert'] if 'noinvert' in img_attrib else False
 
         # get image parameters
         params = ''
@@ -530,17 +531,24 @@ class Compiler:
                         stroke_width = float(style['stroke-width'])
                         width = math.ceil(round(stroke_width/pixel_size, self.precision)/2)
                     if style['fill'] is not None:
-                        fill_color = css_color.parse_css_color2bw8(style['fill'])
+                        # Invert b&w value (beforehand) and apply alpha channel - when available - to inverted b&w value
+                        # Note that step 6 sets option 'noinvert' to be able to use the value below directly.
+                        fill_color = Image2gcode.linear_power(css_color.parse_css_color2bw8(style['fill']), self.settings["maximum_image_laser_power"])
                         if style['fill-rule'] is not None:
                             fill_rule = style['fill-rule']
                             if fill_rule == "nonzero":
                                 logger.warn(f"fill-rule 'nonzero' of object '{name_id}' is currently unsupported!")
                         if style['fill-opacity'] is not None:
-                            # Note that opacity does not work yet (TODO)
                             alpha = float(style['fill-opacity'])
                             if not (alpha >=0 and alpha <= 1):
-                                logger.warn(f"Opacity value '{alpa}' should be in range [0.0..1.0]!")
-                                fill_color = 255
+                                logger.warn(f"Opacity value '{alpha}' should be in range [0.0..1.0]!")
+                                alpha = 1
+                        else:
+                            rgba = css_color.parse_css_color(style['fill'])
+                            alpha = 1
+                            if len(rgba) == 4:
+                                alpha = rgba[3]
+                        fill_color = fill_color * alpha
 
                 # get steps (offsets) for the lines that make the border
                 steps = [0]
@@ -551,6 +559,13 @@ class Compiler:
                             if not (delta == width and width % 2 != 0):
                                 steps.append(round(-delta * pixel_size, self.precision))
 
+                # Get alpha channel (opacity)
+                alpha = 1
+                if len(stroke_color):
+                    rgba = css_color.parse_css_color(stroke_color)
+                    if len(rgba) == 4:
+                        alpha = rgba[3]
+
                 # render svg stroke (of size width)
                 # (draw smooth border outlines in gcode)
                 # Note the update of the boundingbox.
@@ -558,16 +573,16 @@ class Compiler:
                 for step in steps:
                     if step:
                         delta_chain = LineSegmentChain.delta_chain(line_chain, step)
-                        # Note that opacity does not work yet (TODO)
-                        inverse_bw = Image2gcode.linear_power(css_color.parse_css_color2bw8(stroke_color), self.settings["maximum_image_laser_power"])
+                        # apply alpha channel - when available - to inverted b&w value
+                        inverse_bw = Image2gcode.linear_power(css_color.parse_css_color2bw8(stroke_color), self.settings["maximum_image_laser_power"]) * alpha
                         self.append_line_chain(delta_chain, step, inverse_bw)
                         # update 'name_id' boundingbox
                         for line in delta_chain:
                             boundingbox.update(line.start)
                             boundingbox.update(line.end)
                     else:
-                        # Note that opacity does not work yet (TODO)
-                        inverse_bw = Image2gcode.linear_power(css_color.parse_css_color2bw8(stroke_color), self.settings["maximum_image_laser_power"]) if len(stroke_color) else None
+                        # apply alpha channel - when available - to inverted b&w value
+                        inverse_bw = Image2gcode.linear_power(css_color.parse_css_color2bw8(stroke_color), self.settings["maximum_image_laser_power"]) * alpha if len(stroke_color) else None
                         self.append_line_chain(line_chain, step, inverse_bw)
                         # update 'name_id' boundingbox
                         for line in line_chain:
@@ -603,7 +618,7 @@ class Compiler:
                 # step 1: create two raster images matching the bbox
                 # init
                 image_mark = np.full([img_height + 1, img_width + scan_error], 255, dtype=np.uint8)
-                image_fill = np.full([img_height + 1, img_width + scan_error], 255, dtype=np.uint8)
+                image_fill = np.full([img_height + 1, img_width + scan_error], 0, dtype=np.uint8)
 
                 # step 2: add marker lines just inside the line chains of the path
                 # - determine the inside of the line chain
@@ -800,19 +815,19 @@ class Compiler:
                         if step:
                             delta_chain = LineSegmentChain.delta_chain(line_chain, step)
                             for line in delta_chain:
-                                draw_line(image_fill, line.start + vdXY, line.end + vdXY, 255)
+                                draw_line(image_fill, line.start + vdXY, line.end + vdXY, 0)
                         else:
                             for line in line_chain:
-                                draw_line(image_fill, line.start + vdXY, line.end + vdXY, 255)
+                                draw_line(image_fill, line.start + vdXY, line.end + vdXY, 0)
 
                 ## direct gcode: ignore this step
                 # step 5: filter stray pixels (to remove noise from the action above)
                 for y in range(image_fill.shape[0]):
                     for x in range(image_fill.shape[1]):
-                        if image_fill[y,x] != 255:
+                        if image_fill[y,x] != 0:
                             if x > 1 and x < (image_fill.shape[1] - 1) and y > 1 and y < (image_fill.shape[0] - 1):
-                                if image_fill[y,x+1] == 255 and image_fill[y,x-1] == 255 and image_fill[y+1,x] == 255 and image_fill[y-1,x] == 255:
-                                    image_fill[y,x] = 255
+                                if image_fill[y,x+1] == 0 and image_fill[y,x-1] == 0 and image_fill[y+1,x] == 0 and image_fill[y-1,x] == 0:
+                                    image_fill[y,x] = 0
 
                 ## direct gcode: ignore this step
                 # step 6: generate gcode from image_fill
@@ -821,6 +836,7 @@ class Compiler:
                 #img_attrib['gcode_speedmoves'] = 0
                 img_attrib['x'] = -dXY[0]
                 img_attrib['y'] = -dXY[1]
+                img_attrib['noinvert'] = True
 
                 ## direct gcode: ignore this step
                 # start gcode fill

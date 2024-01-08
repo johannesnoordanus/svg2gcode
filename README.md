@@ -32,11 +32,11 @@ Version 3.1.0 and higher have support for 'fill' (color) and 'fill-rule' attribu
 Also, *svg2gcode* option ```--pathcut``` can be used to override all stroke attributes and force cutting of all *paths* of the SVG.
 Option ```--nofill``` (not set by default) is added to disable path fills.
 
-More info can be obtained by looking at the examples below.
-
+More info can be obtained by looking at the examples below and from program *image2gcode* and its documentation (for example about callibrating laser engravers).  
+ 
 Please consider supporting me, so I can make this application better and add new functionality to it: <http://paypal.me/johannesnoordanus/5,00>
 
-My next update will add/fix opacity (this does not work currently). Later on I will add fill-rule 'nonzero'.
+My next update will add fill-rule 'nonzero'.
 
 
 To summarize:
@@ -54,6 +54,7 @@ General optimizations
 - low burn levels (stray pixels) can be suppressed (default off)
 - option *--constantburn* selects constant burn mode *M3* (for cutting and engraving) instead of default dynamic burn mode *M4*
 - borders are drawn in parallel and in one go, following the *path* coordinates.
+- fill has support for alpha channel and 'fill-opacity'
  
 **Tip**: use commandline program *grblhud* *(https://github.com/johannesnoordanus/grblhud)* to have full control over gcode execution,
 also, program *image2gcode* has similar capabilities but handles raster images files (like *png* and *jpg*) directly. 
