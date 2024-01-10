@@ -617,8 +617,8 @@ class Compiler:
 
                 # step 1: create two raster images matching the bbox
                 # init
-                image_mark = np.full([img_height + 1, img_width + scan_error], 255, dtype=np.uint8)
-                image_fill = np.full([img_height + 1, img_width + scan_error], 0, dtype=np.uint8)
+                image_mark = np.full([img_height + 2, img_width + scan_error], 255, dtype=np.uint8)
+                image_fill = np.full([img_height + 2, img_width + scan_error], 0, dtype=np.uint8)
 
                 # step 2: add marker lines just inside the line chains of the path
                 # - determine the inside of the line chain
