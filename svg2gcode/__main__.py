@@ -148,18 +148,18 @@ def main() -> int:
 
     args = parser.parse_args()
 
-##    try:
-    if args.origin is not None and args.selfcenter:
-        print("options --selfcenter and --origin cannot be used at the same time, program abort")
-        return 1
+    try:
+        if args.origin is not None and args.selfcenter:
+            print("options --selfcenter and --origin cannot be used at the same time, program abort")
+            return 1
 
-    return svg2gcode(args)
-####    except KeyboardInterrupt:
-##        print(f"svg2gcode aborted!")
-##    except Exception as error:
-##        print(error)
-##
-##    return 1
+        return svg2gcode(args)
+    except KeyboardInterrupt:
+        print(f"svg2gcode aborted!")
+    except Exception as error:
+        print(error)
+
+    return 1
 
 if __name__ == '__main__':
     sys.exit(main())
