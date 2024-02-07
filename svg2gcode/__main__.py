@@ -7,11 +7,9 @@ import sys
 try:
     import tomllib
 except ImportError:
-    try:
-        import toml
-    except ImportError:
-        print("Import error: either 'toml' must be installed (pip install toml) or python version must be 3.11 or higher!")
-        sys.exit(1)
+    print("Import error: cannot import 'tomllib', python version must be 3.11 or higher!")
+    sys.exit(1)
+
 import argparse
 
 from svg2gcode.svg_to_gcode.svg_parser import parse_file

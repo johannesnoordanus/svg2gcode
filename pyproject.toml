@@ -15,9 +15,8 @@ dependencies = [
     "numpy >= 1.24.3",
     "Pillow >= 9.5.0",
     "image2gcode >= 2.9.8",
-    "scikit-image >= 0.20.0",
 ]
-requires-python = ">=3.7"
+requires-python = ">=3.11"
 
 [project.scripts]
 svg2gcode = "svg2gcode.__main__:main"

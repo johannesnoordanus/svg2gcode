@@ -8,22 +8,19 @@ from io import BytesIO
 from typing import Any
 
 import base64
+from datetime import datetime
 from PIL import Image
-from skimage.draw import line as drawline
 import numpy as np
 
 from svg2gcode.svg_to_gcode.compiler.interfaces import Interface
 from svg2gcode.svg_to_gcode.geometry import Curve
-from svg2gcode.svg_to_gcode.geometry import LineSegmentChain, Line, Vector, RasterImage
+from svg2gcode.svg_to_gcode.geometry import LineSegmentChain, Vector, RasterImage
 from svg2gcode.svg_to_gcode import DEFAULT_SETTING
 from svg2gcode.svg_to_gcode import TOLERANCES, SETTING, check_setting
 
-from svg2gcode.svg_to_gcode import formulas
 from svg2gcode.svg_to_gcode import css_color
 
 from svg2gcode import __version__
-from datetime import datetime
-from PIL import Image
 
 from image2gcode.boundingbox import Boundingbox
 from image2gcode.image2gcode import Image2gcode
@@ -105,7 +102,7 @@ class Compiler:
         params = ''
         for k, v in self.params.items():
             if params != '':
-                params += f",\n"
+                params += ",\n"
             if hasattr(v, 'name'):
                 params += f";      {k}: {os.path.basename(v.name)}"
             else:
@@ -371,7 +368,7 @@ class Compiler:
         params = ''
         for k, v in arguments.items():
             if params != '':
-                params += f",\n"
+                params += ",\n"
             params += f";      {k}: {v}"
 
         self.gcode += [f"; image:\n{params}"]
@@ -390,7 +387,7 @@ class Compiler:
         for example "fill:#F4CF84;fill-rule:evenodd;stroke:#D07735;"
         """
 
-        style = {'fill' : None, 'fill-rule': None, 'fill-opacity': None, 'stroke': None, 'stroke-width': None, 'pathcut': None}
+        style = {'fill' : None, 'fill-rule': None, 'fill-opacity': None, 'stroke': None, 'stroke-width': None, 'stroke-opacity': None, 'pathcut': None}
 
         # parse style attribute
 
@@ -422,6 +419,11 @@ class Compiler:
                 stroke_width = re.search('stroke-width:(\d*\.)?\d+',style_str)
                 if stroke_width:
                     style['stroke-width'] = re.search('(\d*\.)?\d+', stroke_width.group(0)).group(0)
+            # parse stroke-opacity
+            if 'stroke-opacity' in style_str:
+                stroke_opacity = re.search('stroke-opacity:(\d*\.)?\d+',style_str)
+                if stroke_opacity:
+                    style['stroke-opacity'] = re.search('(\d*\.)?\d+', stroke_opacity.group(0)).group(0)
 
             # parse pathcut
             if 'gcode-pathcut' in style_str:
@@ -447,6 +449,10 @@ class Compiler:
         # parse stroke-width attribute
         if 'stroke-width' in curve.path_attrib:
             style['stroke-width'] = curve.path_attrib['stroke-width']
+        # parse stroke-opacity attribute
+        if 'stroke-opacity' in curve.path_attrib:
+            style['stroke-opacity'] = curve.path_attrib['stroke-opacity']
+
         # parse gcode_pathcut attribute
         if 'gcode_pathcut' in curve.path_attrib:
             style['pathcut'] = curve.path_attrib['gcode_pathcut']
@@ -458,13 +464,59 @@ class Compiler:
         Draws curves.
         """
 
+        def line_slope(p1: (int,int), p2: (int,int)):
+            """Calculate the slope of the line p1p2"""
+            x1, y1 = p1[0], p1[1]
+            x2, y2 = p2[0], p2[1]
+
+            if x1 == x2:
+                return 1
+
+            return (y1 - y2) / (x1 - x2)
+
+        def line_offset(p1: (int,int), p2: (int,int)):
+            """Calculate the offset of the line p1p2 from the origin"""
+            x1, y1 = p1[0], p1[1]
+
+            return y1 - line_slope(p1, p2) * x1
+
+        def lline(x, slope, offset):
+            y = slope * x + offset
+            return round(y)
+
+        def draw(img, start: (int,int), end: (int,int), color):
+            """
+            Draws a line from - and including - start (x,y) to - and including - end (x,y).
+            """
+            slope = line_slope(start, end)
+            offset = line_offset(start, end)
+
+            if slope == 1 and ((start[0] - end[0]) != (start[1] - end[1])):
+                # vertical line (not a 45 degrees line)
+                diy = 1 if end[1] > start[1] else -1
+                for y2 in range(start[1], end[1] + diy, diy):
+                    img[y2,start[0]] = color
+            else:
+                # non vertical line
+                dix = 1 if end[0] > start[0] else -1
+                prev = start
+                for x in range(start[0], end[0] + dix, dix):
+                    y = lline(x,slope,offset)
+                    if abs(y - prev[1]) > 1:
+                        di = 1 if y > prev[1] else -1
+                        for y1 in range(prev[1] + di, y, di):
+                            img[y1,x] = color
+
+                    img[y,x] = color
+                    prev = (x,y)
+
         def draw_line(img: np.array, p1: (int,int), p2: (int,int), gray: int):
             """
-            Draws a line.
+            Draws a line from - and including - p1 (x,y) to -and including p2 (x,y).
             """
-            pixel = 1/self.settings["pixel_size"]
-            yy, xx = drawline(int(p1[1]*pixel),int(p1[0]*pixel),int(p2[1]*pixel),int(p2[0]*pixel))
-            img[yy,xx] = gray
+            if not ((p1[0] < 0) or (p1[1] < 0) or (p2[0] < 0) or( p2[1] < 0)):
+                pixel = 1/self.settings["pixel_size"]
+                draw(img, (int(p1[0]*pixel),int(p1[1]*pixel)),(int(p2[0]*pixel),int(p2[1]*pixel)), gray)
 
         path_curves = {}
         pixel_size = float(self.settings["pixel_size"])
@@ -519,6 +571,7 @@ class Compiler:
                 # default stroke width is one line (thickness)
                 width = 0
                 stroke_color = ""
+                stroke_alpha = None
 
                 # get style info for this line chain (of object 'name_id')
                 first_line_of_chain = line_chain.get(0)
@@ -527,30 +580,37 @@ class Compiler:
                     if not (style['pathcut'] == 'true' or self.settings["pathcut"]) \
                         and style['stroke'] is not None and style['stroke'] != "none":
                         stroke_color = style['stroke']
+                        if style['stroke-opacity'] is not None:
+                            # fill opacity attribute overrides rgba property
+                            stroke_alpha = float(style['stroke-opacity'])
+                            if not (stroke_alpha >=0 and stroke_alpha <= 1):
+                                logger.warn(f"Opacity value '{stroke_alpha}' should be in range [0.0..1.0]!")
                     if style['stroke-width'] is not None and style['stroke-width'] != "none":
                         stroke_width = float(style['stroke-width'])
                         width = math.ceil(round(stroke_width/pixel_size, self.precision)/2)
                     if style['fill'] is not None:
-                        # Invert b&w value (beforehand) and apply alpha channel - when available - to inverted b&w value
-                        # Note that step 6 sets option 'noinvert' to be able to use the value below directly.
+                        # Invert b&w value and apply alpha channel - when available - to the inverted b&w value
+                        # (library function image2gcode - as it is now - cannot invert a color value and then apply
+                        #  the alpha channel) Note that step 6 sets option 'noinvert' to be able to use the value below directly.
                         fill_color = Image2gcode.linear_power(css_color.parse_css_color2bw8(style['fill']), self.settings["maximum_image_laser_power"])
                         if style['fill-rule'] is not None:
                             fill_rule = style['fill-rule']
                             if fill_rule == "nonzero":
                                 logger.warn(f"fill-rule 'nonzero' of object '{name_id}' is currently unsupported!")
                         if style['fill-opacity'] is not None:
-                            alpha = float(style['fill-opacity'])
-                            if not (alpha >=0 and alpha <= 1):
-                                logger.warn(f"Opacity value '{alpha}' should be in range [0.0..1.0]!")
-                                alpha = 1
+                            # fill opacity attribute overrides rgba property
+                            fill_alpha = float(style['fill-opacity'])
+                            if not (fill_alpha >=0 and fill_alpha <= 1):
+                                logger.warn(f"Opacity value '{fill_alpha}' should be in range [0.0..1.0]!")
+                                fill_alpha = 1
                         else:
                             rgba = css_color.parse_css_color(style['fill'])
-                            alpha = 1
+                            fill_alpha = 1
                             if len(rgba) == 4:
-                                alpha = rgba[3]
-                        fill_color = fill_color * alpha
+                                fill_alpha = rgba[3]
+                        fill_color = fill_color * fill_alpha
 
-                # get steps (offsets) for the lines that make the border
+                # Get steps (offsets) for the lines that make the border
                 steps = [0]
                 if len(stroke_color) and width:
                     for delta in range(width):
@@ -559,14 +619,16 @@ class Compiler:
                             if not (delta == width and width % 2 != 0):
                                 steps.append(round(-delta * pixel_size, self.precision))
 
-                # Get alpha channel (opacity)
-                alpha = 1
+                # Get stroke alpha channel (opacity)
                 if len(stroke_color):
-                    rgba = css_color.parse_css_color(stroke_color)
-                    if len(rgba) == 4:
-                        alpha = rgba[3]
+                    # fill opacity attribute overrides rgba property
+                    if stroke_alpha is None:
+                        stroke_alpha = 1
+                        rgba = css_color.parse_css_color(stroke_color)
+                        if len(rgba) == 4:
+                            stroke_alpha = rgba[3]
 
-                # render svg stroke (of size width)
+                # Render svg stroke (of size 'width')
                 # (draw smooth border outlines in gcode)
                 # Note the update of the boundingbox.
                 self.body.extend([f"\n; border: '{name_id}'"])
@@ -574,7 +636,7 @@ class Compiler:
                     if step:
                         delta_chain = LineSegmentChain.delta_chain(line_chain, step)
                         # apply alpha channel - when available - to inverted b&w value
-                        inverse_bw = Image2gcode.linear_power(css_color.parse_css_color2bw8(stroke_color), self.settings["maximum_image_laser_power"]) * alpha
+                        inverse_bw = Image2gcode.linear_power(css_color.parse_css_color2bw8(stroke_color), self.settings["maximum_image_laser_power"]) * stroke_alpha
                         self.append_line_chain(delta_chain, step, inverse_bw)
                         # update 'name_id' boundingbox
                         for line in delta_chain:
@@ -582,7 +644,7 @@ class Compiler:
                             boundingbox.update(line.end)
                     else:
                         # apply alpha channel - when available - to inverted b&w value
-                        inverse_bw = Image2gcode.linear_power(css_color.parse_css_color2bw8(stroke_color), self.settings["maximum_image_laser_power"]) * alpha if len(stroke_color) else None
+                        inverse_bw = Image2gcode.linear_power(css_color.parse_css_color2bw8(stroke_color), self.settings["maximum_image_laser_power"]) * stroke_alpha if len(stroke_color) else None
                         self.append_line_chain(line_chain, step, inverse_bw)
                         # update 'name_id' boundingbox
                         for line in line_chain:
@@ -594,7 +656,7 @@ class Compiler:
                 # this is done in 6 steps:
                 # step 1: create two raster images matching the bbox
                 # step 2: add marker lines just inside the line chains of the path
-                # step 3: scan the marker image lines and and apply 'evenodd' fill
+                # step 3: scan the marker image lines and apply 'evenodd' fill
                 #         (fill rule 'nonzero' to be implemented later on see note below)
                 # step 4: draw white borders to erase fill overlap
                 # step 5: filter stray pixels (to remove noise from the action above)
@@ -664,16 +726,16 @@ class Compiler:
                     # Note that the system sometimes returns line_chains having 1 point and thus having no size, this is 'solved'
                     # below, but should not happen (TODO). It is also assumed that line_chain parts that define one shape have
                     # similar sizes (TODO).
-                    if bbox_size > 1 and bbox_size < 50:
+                    if bbox_size > 0 and bbox_size < 6:
                         # small area, less margin for error
                         scan_error = 1
                         del offsets[-2:]
 
-                    ## direct gcode: update this, see step 3 note
+                    ## direct gcode: update this, see note step 3
                     # draw border lines of a specific marker color within line chain
                     # Note that the marker values are just a choice and only have to be consistent
                     # with the algorithm used (step 3)
-                    if bbox_size > 1:
+                    if bbox_size > 0.0:
                         for offset in offsets:
                             # make a line chain just one pixel inside the base (step 0) line chain
                             delta_chain = LineSegmentChain.delta_chain(line_chain, offset)
@@ -752,8 +814,8 @@ class Compiler:
                                         ## direct gcode
                                         ## code += [self.interface.linear_move(x_b * pixel_size - dXY[0], y * pixel_size - dXY[1])]
                                     evenodd = evenodd + 1
-                                if x_b > x:
-                                    x = x_b - 1
+                                #if x_b > x:
+                                x = x_b - 1
                             x += 1
                     else:
                         # scan to the left
@@ -771,7 +833,7 @@ class Compiler:
 
                                 xscan_b = x_b
                                 while xscan_b > 0 and xscan_b > (x_b - scan_error) and (image_mark[y,xscan_b] != 10 and image_mark[y,xscan_b] != 128):
-                                     xscan_b -= 1
+                                    xscan_b -= 1
                                 xscan_a = x + 1
                                 while xscan_a < image_mark.shape[1] and xscan_a < (x + scan_error) and (image_mark[y,xscan_a] != 10 and image_mark[y,xscan_a] != 128):
                                     xscan_a += 1
@@ -798,8 +860,8 @@ class Compiler:
                                         ## direct gcode
                                         ## code += [self.interface.linear_move(x_b * pixel_size - dXY[0], y * pixel_size - dXY[1])]
                                     evenodd = evenodd + 1
-                                if x_b < x:
-                                    x = x_b + 1
+                                #if x_b < x:
+                                x = x_b + 1
                             x -= 1
 
                     # switch scan direction
@@ -810,8 +872,17 @@ class Compiler:
 
                 ## direct gcode: ignore this step
                 # step 4: draw white borders to erase fill overlap
+
+                # 4a: make half steps to 'completely' erase the overlap
+                halfsteps = copy.deepcopy(steps)
+                for step in steps:
+                    if step:
+                        sign = -1 if step >= 0 else 1
+                        halfsteps.append(round(step + sign * pixel_size/2, self.precision))
+
+                # 4b: erase
                 for line_chain in path_curves[name_id]:
-                    for step in steps:
+                    for step in halfsteps:
                         if step:
                             delta_chain = LineSegmentChain.delta_chain(line_chain, step)
                             for line in delta_chain:
@@ -833,7 +904,10 @@ class Compiler:
                 # step 6: generate gcode from image_fill
                 img_attrib = {}
                 img_attrib['id'] = name_id
-                #img_attrib['gcode_speedmoves'] = 0
+                # Set speedmove to a short distance to be able to view it correctly using a viewer like LaserWeb.
+                # (image2gcode converts movements without writing to 'G1 S0' gcodes which viewers show in a specific
+                #  writing color, speedmoves uses gcode G0 to move without writing which viewers show in another color)
+                #img_attrib['gcode_speedmoves'] = 0.1
                 img_attrib['x'] = -dXY[0]
                 img_attrib['y'] = -dXY[1]
                 img_attrib['noinvert'] = True

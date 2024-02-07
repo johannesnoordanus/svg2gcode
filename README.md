@@ -66,6 +66,12 @@ also, program *image2gcode* has similar capabilities but handles raster images f
 > 
 > pip install svg2gcode
 ```
+Some linux distributions use a managed environment in which you cannot install python packages at will. Distribution Debian 12 and Manjaro have this limitation. You can setup a python *venv* and pip install *svg2gcode* in that or you can install systemwide using pipx:
+```
+> 
+> pipx install svg2gcode
+```
+
 <sup>(*)</sup> Note that an upgraded and corrected version of this library is included. 
 ### Usage:
 ```
@@ -124,15 +130,24 @@ options:
   -V, --version         show version number and exit
 ```
 
-You can also store those settings in `~/.config/svg2gcode.toml`, eg:
+#### Configuration file:
+You can also store svg2gcode settings in configuration file `~/.config/svg2gcode.toml` eg:
 
 ```
 xmaxtravel= 400
 ymaxtravel= 400
 imagespeed = 6000
 ```
-
 It can be used with any parameter which takes a value, and alows to persist your laser settings.
+You can create this configuration file using an editor like vi or nano.
+An alternative (quick) way to do that is to enter:
+$ mkdir ~/.config
+$ echo "xmaxtravel= 400
+ymaxtravel= 400
+imagespeed = 6000
+" > ~/.config/svg2gcode.toml
+```
+(but use your own settings!)
 
 ### Examples:
 #### Cutting a SVG *path* element:
@@ -183,7 +198,7 @@ The first lines of the gcode file contain comment lines *;* as shown below.
     ;    GRBL 1.1, unit=mm, absolute coordinates
 
 ```
-Use *gcode2image* to get an acurate representation of the gcode when run on a lasercutter.
+Use *gcode2image* to get an accurate representation of the gcode when run on a lasercutter.
 ```
     > gcode2image --showimage --flip --showorigin --grid --showG0 line_hoek.gc line_hoek.png
 ```
