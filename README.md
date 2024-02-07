@@ -141,6 +141,7 @@ imagespeed = 6000
 It can be used with any parameter which takes a value, and alows to persist your laser settings.
 You can create this configuration file using an editor like vi or nano.
 An alternative (quick) way to do that is to enter:
+```
 $ mkdir ~/.config
 $ echo "xmaxtravel= 400
 ymaxtravel= 400
