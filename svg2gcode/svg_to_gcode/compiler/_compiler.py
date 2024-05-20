@@ -362,7 +362,7 @@ class Compiler:
         arguments["showoverscan"] = img_attrib['gcode_showoverscan'] if 'gcode_showoverscan' in img_attrib else self.settings["image_showoverscan"]
         arguments["offset"] = (float(img_attrib['x']), float(img_attrib['y']))
         arguments["name"] = img_attrib['id']
-        arguments["noinvert"] = img_attrib['noinvert'] if 'noinvert' in img_attrib else False
+        arguments["invert"] = img_attrib['invert'] if 'invert' in img_attrib else False
 
         # get image parameters
         params = ''
@@ -591,7 +591,7 @@ class Compiler:
                     if style['fill'] is not None:
                         # Invert b&w value and apply alpha channel - when available - to the inverted b&w value
                         # (library function image2gcode - as it is now - cannot invert a color value and then apply
-                        #  the alpha channel) Note that step 6 sets option 'noinvert' to be able to use the value below directly.
+                        #  the alpha channel) Note that step 6 sets option 'invert' to false to be able to use the value below directly.
                         fill_color = Image2gcode.linear_power(css_color.parse_css_color2bw8(style['fill']), self.settings["maximum_image_laser_power"])
                         if style['fill-rule'] is not None:
                             fill_rule = style['fill-rule']
@@ -910,7 +910,7 @@ class Compiler:
                 #img_attrib['gcode_speedmoves'] = 0.1
                 img_attrib['x'] = -dXY[0]
                 img_attrib['y'] = -dXY[1]
-                img_attrib['noinvert'] = True
+                img_attrib['invert'] = False
 
                 ## direct gcode: ignore this step
                 # start gcode fill
