@@ -113,7 +113,7 @@ options:
   --overscan <default:0>
                         overscan image lines to avoid incorrect power levels for pixels at left and right borders, number in pixels, default off
   --showoverscan        show overscan pixels (note that this is visible and part of the gcode emitted!)
-  --constantburn        use constant burn mode M3 (a bit more dangerous!), instead of dynamic burn mode M4
+  --constantburn        set constant burn mode M3 (default set to dynamic burn mode M4); this enhances engraving quality
   --origin delta-x delta-y
                         translate origin by vector (delta-x,delta-y) in mm (default not set, option --selfcenter cannot be used at the same time)
   --scale factor-x factor-y
@@ -275,6 +275,10 @@ One containing the drawings of the .svg, the other containing the images:
     > logo.gc             # all drawings
     > logo_images.gc      # all images
 ```   
+
+### Burn mode M3/M4:
+
+Default *svg2gcode* uses dynamic burn mode *M4*. This can be changed by setting option *--constantburn* which selects burn mode *M3*. Mode *M4* is not suitable for engravings because it automatically compensates (laser)power for speed. This conflicts with the specific gcode settings given by *image2gcode* (called by *svg2gcode*) for each pixel. In fact some experiments show that *M4* causes loss of quality and image deterioration when speed is increased. On white oak images had too much black and grey which did not go away for substantially higher speed. When switched back to constant burn (*M3*) mode, the same high speed gave excellent images having a sepia (licht yellow brown) color tone.
 
 ### Notes:
  - drawing objects - within the composer - must be converted to a```path```to be translated to a gcode sequence

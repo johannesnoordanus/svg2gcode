@@ -127,7 +127,7 @@ def main() -> int:
     parser.add_argument('--overscan', default=cfg["overscan_default"], metavar="<default:" +str(cfg["overscan_default"])+ ">",
         type=int, help="overscan image lines to avoid incorrect power levels for pixels at left and right borders, number in pixels, default off")
     parser.add_argument('--showoverscan', action='store_true', default=False, help='show overscan pixels (note that this is visible and part of the gcode emitted!)' )
-    parser.add_argument('--constantburn', action='store_true', default=False, help='use constant burn mode M3 (a bit more dangerous!), instead of dynamic burn mode M4')
+    parser.add_argument('--constantburn', action='store_true', default=False, help='set constant burn mode M3 (default is dynamic burn mode M4); this enhances engraving quality')
     parser.add_argument('--origin', default=None, nargs=2, metavar=('delta-x', 'delta-y'),
         type=float, help="translate origin by vector (delta-x,delta-y) in mm (default not set, option --selfcenter cannot be used at the same time)")
     parser.add_argument('--scale', default=None, nargs=2, metavar=('factor-x', 'factor-y'),
