@@ -253,8 +253,8 @@ def parse_css_color(color: str) -> [int,int,int,float]:
                     rgbcolor = [int(rgbcolor[0] * 255), int(rgbcolor[1] * 255), int(rgbcolor[2] * 255), a]
 
     if not rgbcolor:
-        logger.warn(f"Not a valid css color: '{color}', color set to 'black'!")
-        rgbcolor = css_color_keywords['black']["decimal"]
+        logger.warn(f"Not a valid css color: '{color}', color set to 'white'!")
+        rgbcolor = css_color_keywords['white']["decimal"]
 
     return rgbcolor
 
@@ -273,6 +273,12 @@ def rgb24tobw8(rgb24: [int,int,int,float]) -> int:
         convert a 24 bit rgb (color) value to 8 bit grayscale
     """
     return int(rgb24[0] * 0.299 + rgb24[1] * 0.587 + rgb24[2] * 0.114) & 0xff
+
+def rgb24equal(rgb24, rgb24_2) -> bool:
+    """
+        compare two 24 bit rgb (color) values
+    """
+    return (rgb24[0] == rgb24_2[0]) and (rgb24[1] == rgb24_2[1]) and (rgb24[2] == rgb24_2[2])
 
 def parse_css_color2bw8(color: str) -> int:
     """

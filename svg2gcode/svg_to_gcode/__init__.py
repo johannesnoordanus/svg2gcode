@@ -40,7 +40,8 @@ SETTING 	= {
     "showimage",                # boolean               show image used for conversion to gcode
     "splitfile",                # boolean               return SVG path objects to <filename>.<gcext> and SVG image objects to <filename>_images.<gcext>
     "pathcut",                  # boolean               always cut SVG path objects! use laser_power setting
-    "nofill"                    # boolean               ignore SVG fill attribute
+    "nofill",                   # boolean               ignore SVG fill attribute
+    "color_coded"               # string                color of path determines whether it is a cut or engrave
 }
 
 # Set defaults 'minimum_laser_power', 'pass_depth', 'dwell_time', 'laser_power', 'laser_mode', 'unit', 'distance_mode'
@@ -74,7 +75,8 @@ DEFAULT_SETTING 	= {
     "showimage":                False,          # default image is not shown
     "splitfile":                False,          # SVG path and image objects are emitted to one file: <filename>.<gcext>
     "pathcut":                  False,          # always cut SVG path objects! use laser_power setting
-    "nofill":                   False           # ignore SVG fill attribute
+    "nofill":                   False,          # ignore SVG fill attribute
+    "color_coded":              str             # color of path determines whether it is a cut or engrave
 }
 
 def check_setting(setting: dict[str,Any] =None) -> bool:

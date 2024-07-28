@@ -58,8 +58,9 @@ class Compiler:
 
         # save params
         self.params = params
-	      # get default settings and update
+	# get default settings
         self.settings = copy.deepcopy(DEFAULT_SETTING)
+        # and update
         for key in params.keys():
             self.settings[key] = params[key]
 
@@ -108,12 +109,13 @@ class Compiler:
             else:
                 params += f";      {k}: {v}"
 
-        center = self.boundingbox.center()
         gcode += [ f";    svg2gcode {__version__} ({str(datetime.now()).split('.')[0]})",
-                   f";    arguments: \n{params}",
-                   f";    {self.boundingbox}",
-                   f";    boundingbox center: (X{center[0]:.{0 if center[0].is_integer() else self.precision}f},"
-                   f"Y{center[1]:.{0 if center[1].is_integer() else self.precision}f})" ]
+                   f";    arguments: \n{params}",]
+        if self.boundingbox.get():
+            center = self.boundingbox.center()
+            gcode += [ f";    {self.boundingbox}",
+                       f";    boundingbox center: (X{center[0]:.{0 if center[0].is_integer() else self.precision}f},"
+                       f"Y{center[1]:.{0 if center[1].is_integer() else self.precision}f})" ]
 
         gcode += [ f";    GRBL 1.1, unit={self.settings['unit']}, {self.settings['distance_mode']} coordinates" ]
 
@@ -209,10 +211,15 @@ class Compiler:
                     file.write((self.gcode_file_header() if len(self.body) == 0 else "") + '\n' +  self.compile_images() + '\n' + self.interface.program_end() + '\n')
                     logger.info(f"Added image(s) to {file_name}")
 
-    def append_line_chain(self, line_chain: LineSegmentChain, step: float, color: int = None):
+    def append_line_chain(self, line_chain: LineSegmentChain, step: float, color: int = None, speed: int = None):
         """
-        Draws a LineSegmentChain by calling interface.linear_move() for each segment. The resulting code is appended to
-        self.body
+        Draws a LineSegmentChain (path) by calling interface.linear_move() for each segment.
+        The resulting code is appended to self.body
+
+        :param line_chain: path to draw.
+        :param step: path offset (indicates that this path is offset to another path).
+        :param color: laser intensity, 'laser_power' when set to 'None'.
+        :param speed: laser head movement speed, 'movement_speed' when set to 'None'.
         """
 
         if line_chain.chain_size() == 0:
@@ -224,6 +231,7 @@ class Compiler:
 
         # set laser power to color value when svg attribute 'stroke' (color) is set
         laser_power = color if color is not None else self.settings["laser_power"]
+        movement_speed = speed if speed is not None else self.settings["movement_speed"]
 
 	# Move to the next line_chain when the next line segment doesn't connect to the end of the previous one.
         if self.interface.position is None or abs(self.interface.position - start) > TOLERANCES["operation"]:
@@ -231,13 +239,13 @@ class Compiler:
                 # move to the next line_chain: set laser off, rapid move to start of chain,
                 # set movement (cutting) speed, set laser mode and power on
                 code += [self.interface.laser_off(), self.interface.rapid_move(start.x, start.y),
-                        self.interface.set_movement_speed(self.settings["movement_speed"]),
+                        self.interface.set_movement_speed(movement_speed),
                         self.interface.set_laser_mode(self.settings["laser_mode"]), self.interface.set_laser_power_value(laser_power)]
             else:
                 # move to the next line_chain: set laser mode, set laser power to 0 (cutting is off),
                 # set movement speed, (no rapid) move to start of chain, set laser to power
                 code += [self.interface.set_laser_mode(self.settings["laser_mode"]), self.interface.set_laser_power_value(0),
-                        self.interface.set_movement_speed(self.settings["movement_speed"]), self.interface.linear_move(start.x, start.y),
+                        self.interface.set_movement_speed(movement_speed), self.interface.linear_move(start.x, start.y),
                         self.interface.set_laser_power_value(laser_power)]
 
             self.boundingbox.update(start)
@@ -398,7 +406,9 @@ class Compiler:
             if 'fill' in style_str:
                 fill = re.search('fill:[^;]+;',style_str)
                 if fill:
-                    style['fill'] = fill.group(0)[5:-1]
+                    fill_str = fill.group(0)[5:-1]
+                    if fill_str != 'none':
+                        style['fill'] = fill_str
             # parse fill-rule
             if 'fill-rule' in style_str:
                 fill_rule = re.search('fill-rule:#(evenodd|nonzero)',style_str)
@@ -413,7 +423,9 @@ class Compiler:
             if 'stroke' in style_str:
                 stroke = re.search('stroke:[^;]+;',style_str)
                 if stroke:
-                    style['stroke'] = stroke.group(0)[7:-1]
+                    stroke_str = stroke.group(0)[7:-1]
+                    if stroke_str != 'none':
+                        style['stroke'] = stroke_str
             # parse stroke-width
             if 'stroke-width' in style_str:
                 stroke_width = re.search('stroke-width:(\d*\.)?\d+',style_str)
@@ -435,7 +447,8 @@ class Compiler:
 
         # parse fill attribute
         if 'fill' in curve.path_attrib:
-            style['fill'] = curve.path_attrib['fill']
+            if curve.path_attrib['fill'] != 'none':
+                style['fill'] = curve.path_attrib['fill']
         if 'fill-rule' in curve.path_attrib:
             style['fill-rule'] = curve.path_attrib['fill-rule']
         # parse fill-opacity
@@ -445,7 +458,9 @@ class Compiler:
                 style['fill-opacity'] = re.search('(\d*\.)?\d+', fill_opacity.group(0)).group(0)
         # parse stroke attribute
         if 'stroke' in curve.path_attrib:
-            style['stroke'] = curve.path_attrib['stroke']
+            stroke_str = curve.path_attrib['stroke']
+            if stroke_str != 'none':
+                style['stroke'] = stroke_str
         # parse stroke-width attribute
         if 'stroke-width' in curve.path_attrib:
             style['stroke-width'] = curve.path_attrib['stroke-width']
@@ -458,6 +473,87 @@ class Compiler:
             style['pathcut'] = curve.path_attrib['gcode_pathcut']
 
         return style
+
+    def color_coded_paths(self, set_color_coded = False) -> ():
+        """
+        Get color_coded info
+        Return string tuple (pathignore, pathcut, pathengrave)
+        """
+        pathignore = None
+        pathcut = None
+        pathengrave = None
+
+        if self.settings["color_coded"]:
+            color_code = self.settings["color_coded"]
+
+            # get css color names
+            colors = str([*css_color.css_color_keywords])
+            colors = re.sub("(,|\[|\]|\'| )", '', colors.replace(",", "|"))
+
+            # get ignore (do not draw) colors
+            colors_ignore_regex = "((" + colors + ") *= *ignore)+"
+            match = re.findall(colors_ignore_regex, color_code)
+            pathignore = [i[1] for i in match]
+
+            # get cut colors
+            colors_cut_regex = "((" + colors + ") *= *cut)+"
+            match = re.findall(colors_cut_regex, color_code)
+            pathcut = [i[1] for i in match]
+
+            # get engrave colors
+            colors_engrave_regex = "((" + colors + ") *= *engrave)+"
+            match = re.findall(colors_engrave_regex, color_code)
+            pathengrave = [i[1] for i in match]
+
+            if set_color_coded:
+                cced = ""
+                for i in pathignore:
+                    cced += f"{i} = ignore "
+                for i in pathcut:
+                    cced += f"{i} = cut "
+                for i in pathengrave:
+                    cced += f"{i} = engrave "
+
+                # set color_coded option string to the actual version
+                self.settings["color_coded"] = cced
+                self.params["color_coded"] = cced
+
+        return (pathignore, pathcut, pathengrave)
+
+    def parse_color_coded(self, stroke_color: str = None) -> ():
+        """
+        Parse option --color_coded
+        Return tuple (ignorepath, cutpath, engravepath)
+        """
+        if self.settings["color_coded"]:
+
+            ignorepath = False
+            cutpath = False
+            engravepath = False
+
+            # Get colo_coded info
+            pathignore, pathcut, pathengrave = self.color_coded_paths();
+
+            for color in pathignore:
+                if css_color.rgb24equal(css_color.parse_css_color(stroke_color), css_color.css_color_keywords[color]["decimal"]):
+                    # stroke color is ignored (no path is drawn)
+                    ignorepath = True
+                    break
+
+            if not ignorepath:
+                # cut path if option --color_coded is selected and stroke_color == "red"
+                for color in pathcut:
+                    if css_color.rgb24equal(css_color.parse_css_color(stroke_color), css_color.css_color_keywords[color]["decimal"]):
+                        cutpath = True
+                        break
+
+                if not cutpath:
+                    for color in pathengrave:
+                        if css_color.rgb24equal(css_color.parse_css_color(stroke_color), css_color.css_color_keywords[color]["decimal"]):
+                            engravepath = True
+                            break
+
+        return (ignorepath, cutpath, engravepath)
 
     def append_curves(self, curves: list[Curve]):
         """
@@ -518,6 +614,84 @@ class Compiler:
                 pixel = 1/self.settings["pixel_size"]
                 draw(img, (int(p1[0]*pixel),int(p1[1]*pixel)),(int(p2[0]*pixel),int(p2[1]*pixel)), gray)
 
+        def render_pathwidth(line_chain: LineSegmentChain, steps: list[float], color: int = None, speed: int = None, boundingbox = None):
+            """
+            Render - generate gcode for - a path of certain 'width'.
+            """
+            # A path can be an 'engraving' or a 'cut'.
+            for step in steps:      # step 'width'
+                if step:
+                    # calculate delta chain
+                    delta_chain = LineSegmentChain.delta_chain(line_chain, step)
+
+                    # Note that append_line_chain generates a path cut when inverse_bw and speed are set to None.
+                    self.append_line_chain(delta_chain, step, color, speed)
+
+                    # update boundingbox of this 'name_id'
+                    for line in delta_chain:
+                        boundingbox.update(line.start)
+                        boundingbox.update(line.end)
+                else:
+                    # Note that append_line_chain generates a path cut when inverse_bw and speed are set to None.
+                    self.append_line_chain(line_chain, 0, color, speed)
+                    # update boundingbox of this 'name_id'
+                    for line in line_chain:
+                        boundingbox.update(line.start)
+                        boundingbox.update(line.end)
+
+        def get_style_info_of_line_chain(line_chain: LineSegmentChain) -> ():
+            """
+            Get style info of line_chain.
+            Returns tuple (stroke_width, stroke_color, stroke_alpha, fill_color, fill_alpha, fill_rule)
+            """
+            # defaults
+            stroke_width = 0
+            stroke_color = ""
+            stroke_alpha = None
+            fill_color = None
+            fill_alpha = None
+            fill_rule = None
+
+            # get style info for this line chain
+            first_line_of_chain = line_chain.get(0)
+            style = self.parse_style_attribute(first_line_of_chain)
+            if style:
+                if not (style['pathcut'] == 'true' or self.settings["pathcut"]) \
+                    and style['stroke'] is not None and style['stroke'] != "none":
+                    stroke_color = style['stroke']
+                    if style['stroke-opacity'] is not None:
+                        # fill opacity attribute overrides rgba property
+                        stroke_alpha = float(style['stroke-opacity'])
+                        if not (stroke_alpha >=0 and stroke_alpha <= 1):
+                            logger.warn(f"Opacity value '{stroke_alpha}' should be in range [0.0..1.0]!")
+                if style['stroke-width'] is not None and style['stroke-width'] != "none":
+                    width = float(style['stroke-width'])
+                    stroke_width = math.ceil(round(width/pixel_size, self.precision)/2)
+                if style['fill'] is not None and style['fill'] != 'none':
+                    # Invert b&w value and apply alpha channel - when available - to the inverted b&w value
+                    # Library function image2gcode - as it is now - cannot invert a color value and then apply the alpha channel.
+                    # Note that step 6 of '# Render svg fill attribute' below, sets option 'invert' of image2gcode to false to use fill_color directly.)
+                    fill_color = Image2gcode.linear_power(css_color.parse_css_color2bw8(style['fill']), self.settings["maximum_image_laser_power"])
+                    if style['fill-rule'] is not None:
+                        fill_rule = style['fill-rule']
+                        if fill_rule == "nonzero":
+                            logger.warn(f"fill-rule 'nonzero' of object '{name_id}' is currently unsupported!")
+                    if style['fill-opacity'] is not None:
+                        # fill opacity attribute overrides rgba property
+                        fill_alpha = float(style['fill-opacity'])
+                        if not (fill_alpha >=0 and fill_alpha <= 1):
+                            logger.warn(f"Opacity value '{fill_alpha}' should be in range [0.0..1.0]!")
+                            fill_alpha = 1
+                    else:
+                        rgba = css_color.parse_css_color(style['fill'])
+                        fill_alpha = 1
+                        if len(rgba) == 4:
+                            fill_alpha = rgba[3]
+                    fill_color = fill_color * fill_alpha
+
+            return (stroke_width, stroke_color, stroke_alpha, fill_color, fill_alpha, fill_rule)
+
+
         path_curves = {}
         pixel_size = float(self.settings["pixel_size"])
 
@@ -556,71 +730,33 @@ class Compiler:
                     # add line segments to curves having this id
                     path_curves[curve_name_id].append(line_chain)
 
-        # default stroke width is one line (thickness)
-        stroke_width = pixel_size
-
         # emit all paths (organized by name id)
         for name_id in path_curves:
+
             steps = []
             fill_color = None
+            fill_alpha = None
             fill_rule = None
+
             # set a boundingbox per 'name_id'
             boundingbox = Boundingbox()
+
+            # Render svg 'stroke' attribute
             for line_chain in path_curves[name_id]:
+                # get style info
+                stroke_width, stroke_color, stroke_alpha, fill_color, fill_alpha, fill_rule = get_style_info_of_line_chain(line_chain)
 
-                # default stroke width is one line (thickness)
-                width = 0
-                stroke_color = ""
-                stroke_alpha = None
-
-                # get style info for this line chain (of object 'name_id')
-                first_line_of_chain = line_chain.get(0)
-                style = self.parse_style_attribute(first_line_of_chain)
-                if style:
-                    if not (style['pathcut'] == 'true' or self.settings["pathcut"]) \
-                        and style['stroke'] is not None and style['stroke'] != "none":
-                        stroke_color = style['stroke']
-                        if style['stroke-opacity'] is not None:
-                            # fill opacity attribute overrides rgba property
-                            stroke_alpha = float(style['stroke-opacity'])
-                            if not (stroke_alpha >=0 and stroke_alpha <= 1):
-                                logger.warn(f"Opacity value '{stroke_alpha}' should be in range [0.0..1.0]!")
-                    if style['stroke-width'] is not None and style['stroke-width'] != "none":
-                        stroke_width = float(style['stroke-width'])
-                        width = math.ceil(round(stroke_width/pixel_size, self.precision)/2)
-                    if style['fill'] is not None:
-                        # Invert b&w value and apply alpha channel - when available - to the inverted b&w value
-                        # (library function image2gcode - as it is now - cannot invert a color value and then apply
-                        #  the alpha channel) Note that step 6 sets option 'invert' to false to be able to use the value below directly.
-                        fill_color = Image2gcode.linear_power(css_color.parse_css_color2bw8(style['fill']), self.settings["maximum_image_laser_power"])
-                        if style['fill-rule'] is not None:
-                            fill_rule = style['fill-rule']
-                            if fill_rule == "nonzero":
-                                logger.warn(f"fill-rule 'nonzero' of object '{name_id}' is currently unsupported!")
-                        if style['fill-opacity'] is not None:
-                            # fill opacity attribute overrides rgba property
-                            fill_alpha = float(style['fill-opacity'])
-                            if not (fill_alpha >=0 and fill_alpha <= 1):
-                                logger.warn(f"Opacity value '{fill_alpha}' should be in range [0.0..1.0]!")
-                                fill_alpha = 1
-                        else:
-                            rgba = css_color.parse_css_color(style['fill'])
-                            fill_alpha = 1
-                            if len(rgba) == 4:
-                                fill_alpha = rgba[3]
-                        fill_color = fill_color * fill_alpha
-
-                # Get steps (offsets) for the lines that make the border
-                steps = [0]
-                if len(stroke_color) and width:
-                    for delta in range(width):
-                        if delta:
-                            steps.append(round(delta * pixel_size, self.precision))
-                            if not (delta == width and width % 2 != 0):
-                                steps.append(round(-delta * pixel_size, self.precision))
-
-                # Get stroke alpha channel (opacity)
                 if len(stroke_color):
+                    # Get steps (offsets) for the lines that make the border
+                    steps = [0]
+                    if stroke_width:
+                        for delta in range(stroke_width):
+                            if delta:
+                                steps.append(round(delta * pixel_size, self.precision))
+                                if not (delta == stroke_width and stroke_width % 2 != 0):
+                                    steps.append(round(-delta * pixel_size, self.precision))
+
+                    # Get stroke alpha channel (opacity)
                     # fill opacity attribute overrides rgba property
                     if stroke_alpha is None:
                         stroke_alpha = 1
@@ -628,30 +764,49 @@ class Compiler:
                         if len(rgba) == 4:
                             stroke_alpha = rgba[3]
 
-                # Render svg stroke (of size 'width')
-                # (draw smooth border outlines in gcode)
-                # Note the update of the boundingbox.
-                self.body.extend([f"\n; border: '{name_id}'"])
-                for step in steps:
-                    if step:
-                        delta_chain = LineSegmentChain.delta_chain(line_chain, step)
-                        # apply alpha channel - when available - to inverted b&w value
-                        inverse_bw = Image2gcode.linear_power(css_color.parse_css_color2bw8(stroke_color), self.settings["maximum_image_laser_power"]) * stroke_alpha
-                        self.append_line_chain(delta_chain, step, inverse_bw)
-                        # update 'name_id' boundingbox
-                        for line in delta_chain:
-                            boundingbox.update(line.start)
-                            boundingbox.update(line.end)
-                    else:
-                        # apply alpha channel - when available - to inverted b&w value
-                        inverse_bw = Image2gcode.linear_power(css_color.parse_css_color2bw8(stroke_color), self.settings["maximum_image_laser_power"]) * stroke_alpha if len(stroke_color) else None
-                        self.append_line_chain(line_chain, step, inverse_bw)
-                        # update 'name_id' boundingbox
-                        for line in line_chain:
-                            boundingbox.update(line.start)
-                            boundingbox.update(line.end)
+                    # engrave values
+                    # set inversed b&w value (and apply alpha channel, when available)
+                    inverse_bw = Image2gcode.linear_power(css_color.parse_css_color2bw8(stroke_color), \
+                                                          self.settings["maximum_image_laser_power"]) * stroke_alpha
+                    # set laser head movement speed
+                    speed = self.settings["image_movement_speed"]
 
-            if not self.settings["nofill"] and fill_color is not None:
+                    # handle option color_coded
+                    if self.settings["color_coded"]:
+                        # get color_coded info
+                        ignorepath, cutpath, engravepath = self.parse_color_coded(stroke_color)
+
+                        if not ignorepath:
+
+                            if cutpath:
+                                # color_coded set cut path for this stroke_color
+                                self.body.extend([f"\n; --color_coded cut path '{name_id}', color '{stroke_color}'"])
+                                render_pathwidth(line_chain, [0], None, None, boundingbox)
+                            else:
+                                # engrave path ...
+                                pathignore, pathcut, pathengrave = color_coded_paths()
+
+                                # ... if color_coded did not set engrave (at all) or set engrave for this stroke_color
+                                if len(pathengrave) == 0 or engravepath:
+                                    if len(pathengrave) == 0:
+                                        self.body.extend([f"\n; --color_coded: engrave not set, path '{name_id}', color '{stroke_color}'"])
+                                    else:
+                                        self.body.extend([f"\n; --color_coded: engrave path '{name_id}', color '{stroke_color}'"])
+                                    render_pathwidth(line_chain, steps, inverse_bw, speed, boundingbox)
+                        else:
+                            self.body.extend([f"\n; --color_coded: ignore path '{name_id}', color '{stroke_color}'"])
+
+                    else:
+                        # color_coded isn't set: engrave path
+                        self.body.extend([f"\n; engrave path '{name_id}', color '{stroke_color}'"])
+                        render_pathwidth(line_chain, steps, inverse_bw, speed, boundingbox)
+                else:
+                    # line stroke isn't set: cut path
+                    self.body.extend([f"\n; no stroke color: cut path '{name_id}'"])
+                    render_pathwidth(line_chain, [0], None, None, boundingbox)
+
+            # Render svg 'fill' attribute
+            if not self.settings["nofill"] and fill_color is not None and boundingbox.get() is not None:
                 # fill a path
                 # this is done in 6 steps:
                 # step 1: create two raster images matching the bbox
@@ -660,7 +815,7 @@ class Compiler:
                 #         (fill rule 'nonzero' to be implemented later on see note below)
                 # step 4: draw white borders to erase fill overlap
                 # step 5: filter stray pixels (to remove noise from the action above)
-                # step 6: generate gcode from image_fill
+                # step 6: generate gcode from image_fill (by execution function image2gcode)
 
                 # get bounding box info from the path border
                 lowerleft = boundingbox.get()[0]
@@ -754,11 +909,11 @@ class Compiler:
                 #               for markers (border,inside border) and apply rule
                 #               'evenodd' to fill when an even number of borders
                 #               is crossed, untill odd
-                # Note that the image 'image_fill' is filled not 'image_mark' to make sure marks stay in place.
+                # Note that image 'image_fill' is filled (not 'image_mark') to make sure marks stay in place.
 
                 # Note that the fill algorithm can be adapted to support direct rendering of gcode (instead of rendering via 'image_fill' and
                 # function 'image2gcode', converting a raster image to gcode). This reduces the number of steps needed: steps 4, 5 and 6 can
-                # be left out. It does need a few adaptions in the previous steps, namely drawing the line chain border (color '10') in full width
+                # be left out. It does need a few adaptations in the previous steps, namely drawing the line chain border (color '10') in full width
                 # (instead of 1 pixel) and draw the 'inside' line (color 128) one pixel further. In addition to this uncomment the '## direct gcode'
                 # lines of step 3 to activate gcode rendering.
 
@@ -914,7 +1069,6 @@ class Compiler:
 
                 ## direct gcode: ignore this step
                 # start gcode fill
-                self.body.extend([f"\n;fill '{name_id}'"])
                 self.image2gcode(img_attrib, image_fill)
 
     def check_axis_maximum_travel(self):
@@ -929,9 +1083,10 @@ class Compiler:
         :return true when box is in machine area bounds, false otherwise
         """
 
-        if self.settings["distance_mode"] == "absolute" and self.check_axis_maximum_travel():
+        if self.settings["distance_mode"] == "absolute" and self.check_axis_maximum_travel() and self.boundingbox.get():
             machine_max = Vector(self.settings["x_axis_maximum_travel"],self.settings["y_axis_maximum_travel"])
             bbox = self.boundingbox.get()
+
             # bbox[0] == lowerleft, bbox[1] == uperright, bbox[0/1][0] == x, bbox[0/1][1] == y
             #      lower left x and y >= 0 and upperright x and y <= resp. machine max x and y
             return (bbox[0][0] >= 0 and bbox[0][1] >=0

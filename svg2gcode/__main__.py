@@ -4,6 +4,7 @@ svg2gcode: convert an image to gcode.
 
 import os
 import sys
+import re
 try:
     import tomllib
 except ImportError:
@@ -16,6 +17,7 @@ from svg2gcode.svg_to_gcode.svg_parser import parse_file
 from svg2gcode.svg_to_gcode.compiler import Compiler, interfaces
 
 from svg2gcode import __version__
+from svg2gcode.svg_to_gcode import css_color
 
 config_file = os.path.expanduser('~/.config/svg2gcode.toml')
 
@@ -35,9 +37,24 @@ def svg2gcode(args) -> int:
                'maximum_image_laser_power':args.imagepower, 'image_movement_speed':args.imagespeed, 'fan':args.fan,'rapid_move':args.rapidmove,
                'showimage':args.showimage, 'x_axis_maximum_travel':args.xmaxtravel,'y_axis_maximum_travel':args.ymaxtravel, 'image_noise':args.noise,
                'pass_depth':args.pass_depth, 'laser_mode':"constant" if args.constantburn else "dynamic", 'splitfile':args.splitfile, 'pathcut':args.pathcut,
-               'nofill':args.nofill, 'image_poweroffset':args.poweroffset, 'image_overscan':args.overscan, 'image_showoverscan':args.showoverscan})
+               'nofill':args.nofill, 'image_poweroffset':args.poweroffset, 'image_overscan':args.overscan, 'image_showoverscan':args.showoverscan,
+               'color_coded': args.color_coded,})
 
     compiler = init_compiler(args)
+
+    if args.color_coded != "":
+        # check color_coded argument validity (2)
+        pathignore, pathcut, pathengrave = compiler.color_coded_paths(True)
+
+        # a path color should be in one set only
+        for i in pathignore:
+            if i in pathcut or i in pathengrave:
+                print(f"argument error: '--color_coded \"{args.color_coded}\"' has a path color '{i}' set in multiple categories (cut|engrave|ignore) .")
+                return 1
+        for i in pathcut:
+            if i in pathengrave:
+                print(f"argument error: '--color_coded \"{args.color_coded}\"' has a path color '{i}' set in multiple categories (cut|engrave|ignore) .")
+                return 1
 
     # emit gcode for svg
     if args.selfcenter:
@@ -92,6 +109,8 @@ def main() -> int:
         "pass_depth_default": 0,
         "passes_default": 1,
         "rotate_default": 0,
+        "colorcoded_default": "",
+        "constantburn_default": True,
     }
 
     if os.path.exists(config_file):
@@ -127,7 +146,7 @@ def main() -> int:
     parser.add_argument('--overscan', default=cfg["overscan_default"], metavar="<default:" +str(cfg["overscan_default"])+ ">",
         type=int, help="overscan image lines to avoid incorrect power levels for pixels at left and right borders, number in pixels, default off")
     parser.add_argument('--showoverscan', action='store_true', default=False, help='show overscan pixels (note that this is visible and part of the gcode emitted!)' )
-    parser.add_argument('--constantburn', action='store_true', default=False, help='set constant burn mode M3 (default is dynamic burn mode M4); this enhances engraving quality')
+    parser.add_argument('--constantburn', action=argparse.BooleanOptionalAction, default=cfg["constantburn_default"], help='default constant burn mode (M3)')
     parser.add_argument('--origin', default=None, nargs=2, metavar=('delta-x', 'delta-y'),
         type=float, help="translate origin by vector (delta-x,delta-y) in mm (default not set, option --selfcenter cannot be used at the same time)")
     parser.add_argument('--scale', default=None, nargs=2, metavar=('factor-x', 'factor-y'),
@@ -141,12 +160,40 @@ def main() -> int:
         type=int, help="machine x-axis lengh in mm")
     parser.add_argument('--ymaxtravel', default=cfg["ymaxtravel_default"], metavar="<default:" +str(cfg["ymaxtravel_default"])+ ">",
         type=int, help="machine y-axis lengh in mm")
+    parser.add_argument( '--color_coded', action = 'store', default=cfg["colorcoded_default"], metavar="<default:\"" + str(cfg["colorcoded_default"])+ "\">",
+         type = str, help = 'set action for path with specific stroke color "[color = [cut|engrave|ignore] *]*"'
+                            ', example: --color_coded "black = ignore purple = cut blue = engrave"' )
     parser.add_argument('--fan', action='store_true', default=False, help='set machine fan on' )
     parser.add_argument('-V', '--version', action='version', version='%(prog)s ' + __version__, help="show version number and exit")
 
     args = parser.parse_args()
 
     try:
+        if args.color_coded != "":
+            if args.pathcut:
+                print("options --color_coded and --pathcut cannot be used at the same time, program abort")
+                return 1
+            # check argument validity (1)
+
+            # category names
+            category = ["cut", "engrave", "ignore"]
+            # get css color names
+            colors = str([*css_color.css_color_keywords])
+            colors = re.sub("(,|\[|\]|\'| )", '', colors.replace(",", "|"))
+
+            # make a color list
+            colors = colors.split("|")
+
+            # get all names from color_coded
+            names_regex = "[a-zA-Z]+"
+            match = re.findall(names_regex, args.color_coded)
+            names = [i for i in match]
+
+            for name in names:
+                if not (name in colors or name in category):
+                    print(f"argument error: '--color_coded {args.color_coded}' has a name '{name}' that does not correspond to a css color or category (cut|engrave|ignore).")
+                    return 1
+
         if args.origin is not None and args.selfcenter:
             print("options --selfcenter and --origin cannot be used at the same time, program abort")
             return 1
