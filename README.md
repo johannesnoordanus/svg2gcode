@@ -15,7 +15,7 @@ You have full control of placing (locating) of the gcode end result. You can for
 
 More info can be obtained by looking at the documentation and examples below and the documentation of *image2gcode* (for example about calibration of laser engravers).
 
-*svg2gcode* has three related programs: *image2gcode* mentioned above has similar capabilities but handles raster images files (like *png* and *jpg*) directly, *gcode2image* performs the inverse function and is capable of showing multiple writes (burns) to the same location and last *grblhud* which gives full control over gcode execution.
+*svg2gcode* has three related programs: *image2gcode* mentioned above has similar capabilities but handles raster image files (like *png* and *jpg*) directly, *gcode2image* performs the inverse function and is capable of showing multiple writes (burns) to the same location and last *grblhud* which gives full control over gcode execution.
 
  -----
 
