@@ -784,7 +784,7 @@ class Compiler:
                                 render_pathwidth(line_chain, [0], None, None, boundingbox)
                             else:
                                 # engrave path ...
-                                pathignore, pathcut, pathengrave = color_coded_paths()
+                                pathignore, pathcut, pathengrave = self.color_coded_paths()
 
                                 # ... if color_coded did not set engrave (at all) or set engrave for this stroke_color
                                 if len(pathengrave) == 0 or engravepath:
@@ -816,6 +816,8 @@ class Compiler:
                 # step 4: draw white borders to erase fill overlap
                 # step 5: filter stray pixels (to remove noise from the action above)
                 # step 6: generate gcode from image_fill (by execution function image2gcode)
+
+                self.body.extend([f"\n; fill path '{name_id}'"])
 
                 # get bounding box info from the path border
                 lowerleft = boundingbox.get()[0]
