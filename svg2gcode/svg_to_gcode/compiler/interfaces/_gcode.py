@@ -180,7 +180,7 @@ class Gcode(Interface):
         new_mode = ("\nM8" if self._machine_params['fan'] else '') + ("\n" + self._laser_mode if self._laser_mode_changed else '')
         self._laser_mode_changed = False
 	# return laser mode (M3 constant laser power or M4 dynamic laser power) when laser mode changed
-        return f"; Cut at F{self._next_speed} {self._unit}/min, power S{machine_value}{new_mode}"
+        return f"; F{self._next_speed} {self._unit}/min, power S{machine_value}{new_mode}"
 
     def set_laser_mode(self, mode):
 	# set constant/dynamic laser power mode

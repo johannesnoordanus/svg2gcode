@@ -370,7 +370,7 @@ class Compiler:
         arguments["showoverscan"] = img_attrib['gcode_showoverscan'] if 'gcode_showoverscan' in img_attrib else self.settings["image_showoverscan"]
         arguments["offset"] = (float(img_attrib['x']), float(img_attrib['y']))
         arguments["name"] = img_attrib['id']
-        arguments["invert"] = img_attrib['invert'] if 'invert' in img_attrib else False
+        arguments["invert"] = img_attrib['invert'] if 'invert' in img_attrib else True
 
         # get image parameters
         params = ''
@@ -671,7 +671,10 @@ class Compiler:
                     # Invert b&w value and apply alpha channel - when available - to the inverted b&w value
                     # Library function image2gcode - as it is now - cannot invert a color value and then apply the alpha channel.
                     # Note that step 6 of '# Render svg fill attribute' below, sets option 'invert' of image2gcode to false to use fill_color directly.)
-                    fill_color = Image2gcode.linear_power(css_color.parse_css_color2bw8(style['fill']), self.settings["maximum_image_laser_power"])
+
+                    # invert (byte value)
+                    fill_color = Image2gcode.linear_power(css_color.parse_css_color2bw8(style['fill']), 255)
+
                     if style['fill-rule'] is not None:
                         fill_rule = style['fill-rule']
                         if fill_rule == "nonzero":
@@ -687,7 +690,7 @@ class Compiler:
                         fill_alpha = 1
                         if len(rgba) == 4:
                             fill_alpha = rgba[3]
-                    fill_color = fill_color * fill_alpha
+                    fill_color = round(fill_color * fill_alpha)
 
             return (stroke_width, stroke_color, stroke_alpha, fill_color, fill_alpha, fill_rule)
 
@@ -747,14 +750,6 @@ class Compiler:
                 stroke_width, stroke_color, stroke_alpha, fill_color, fill_alpha, fill_rule = get_style_info_of_line_chain(line_chain)
 
                 if len(stroke_color):
-                    # Get steps (offsets) for the lines that make the border
-                    steps = [0]
-                    if stroke_width:
-                        for delta in range(stroke_width):
-                            if delta:
-                                steps.append(round(delta * pixel_size, self.precision))
-                                if not (delta == stroke_width and stroke_width % 2 != 0):
-                                    steps.append(round(-delta * pixel_size, self.precision))
 
                     # Get stroke alpha channel (opacity)
                     # fill opacity attribute overrides rgba property
@@ -766,8 +761,8 @@ class Compiler:
 
                     # engrave values
                     # set inversed b&w value (and apply alpha channel, when available)
-                    inverse_bw = Image2gcode.linear_power(css_color.parse_css_color2bw8(stroke_color), \
-                                                          self.settings["maximum_image_laser_power"]) * stroke_alpha
+                    inverse_bw = round(Image2gcode.linear_power(css_color.parse_css_color2bw8(stroke_color),
+                                                          self.settings["maximum_image_laser_power"]) * stroke_alpha)
                     # set laser head movement speed
                     speed = self.settings["image_movement_speed"]
 
@@ -782,31 +777,51 @@ class Compiler:
                                 # color_coded set cut path for this stroke_color
                                 self.body.extend([f"\n; --color_coded cut path '{name_id}', color '{stroke_color}'"])
                                 render_pathwidth(line_chain, [0], None, None, boundingbox)
-                            else:
-                                # engrave path ...
+                            elif inverse_bw:
+                                # with path color, setengrave path ...
                                 pathignore, pathcut, pathengrave = self.color_coded_paths()
 
                                 # ... if color_coded did not set engrave (at all) or set engrave for this stroke_color
                                 if len(pathengrave) == 0 or engravepath:
+                                    # Get steps (offsets) for the lines that make the border
+                                    steps = [0]
+                                    if stroke_width:
+                                        for delta in range(stroke_width):
+                                            if delta:
+                                                steps.append(round(delta * pixel_size, self.precision))
+                                                if not (delta == stroke_width and stroke_width % 2 != 0):
+                                                    steps.append(round(-delta * pixel_size, self.precision))
+
                                     if len(pathengrave) == 0:
                                         self.body.extend([f"\n; --color_coded: engrave not set, path '{name_id}', color '{stroke_color}'"])
                                     else:
                                         self.body.extend([f"\n; --color_coded: engrave path '{name_id}', color '{stroke_color}'"])
                                     render_pathwidth(line_chain, steps, inverse_bw, speed, boundingbox)
                         else:
+                            # ignore path
                             self.body.extend([f"\n; --color_coded: ignore path '{name_id}', color '{stroke_color}'"])
 
-                    else:
-                        # color_coded isn't set: engrave path
+                    elif inverse_bw:
+                        # Get steps (offsets) for the lines that make the border
+                        steps = [0]
+                        if stroke_width:
+                            for delta in range(stroke_width):
+                                if delta:
+                                    steps.append(round(delta * pixel_size, self.precision))
+                                    if not (delta == stroke_width and stroke_width % 2 != 0):
+                                        steps.append(round(-delta * pixel_size, self.precision))
+
+                        # color_coded isn't set: with path color engrave path
                         self.body.extend([f"\n; engrave path '{name_id}', color '{stroke_color}'"])
                         render_pathwidth(line_chain, steps, inverse_bw, speed, boundingbox)
                 else:
-                    # line stroke isn't set: cut path
-                    self.body.extend([f"\n; no stroke color: cut path '{name_id}'"])
-                    render_pathwidth(line_chain, [0], None, None, boundingbox)
+                    # line stroke isn't set: ignore path
+                    self.body.extend([f"\n; no stroke color set: ignore path '{name_id}'"])
+                    #render_pathwidth(line_chain, [0], None, None, boundingbox)
 
             # Render svg 'fill' attribute
-            if not self.settings["nofill"] and fill_color is not None and boundingbox.get() is not None:
+            #if not self.settings["nofill"] and fill_color is not None and boundingbox.get() is not None:
+            if not self.settings["nofill"] and fill_color is not None:
                 # fill a path
                 # this is done in 6 steps:
                 # step 1: create two raster images matching the bbox
@@ -817,7 +832,11 @@ class Compiler:
                 # step 5: filter stray pixels (to remove noise from the action above)
                 # step 6: generate gcode from image_fill (by execution function image2gcode)
 
-                self.body.extend([f"\n; fill path '{name_id}'"])
+                # update boundingbox for this 'name_id'
+                for line_chain in path_curves[name_id]:
+                    for line in line_chain:
+                        boundingbox.update(line.start)
+                        boundingbox.update(line.end)
 
                 # get bounding box info from the path border
                 lowerleft = boundingbox.get()[0]
@@ -836,8 +855,8 @@ class Compiler:
 
                 # step 1: create two raster images matching the bbox
                 # init
-                image_mark = np.full([img_height + 2, img_width + scan_error], 255, dtype=np.uint8)
-                image_fill = np.full([img_height + 2, img_width + scan_error], 0, dtype=np.uint8)
+                image_mark = np.full([img_height + 4, img_width + scan_error + 2], 255, dtype=np.uint8)
+                image_fill = np.full([img_height + 4, img_width + scan_error + 2], 0, dtype=np.uint8)
 
                 # step 2: add marker lines just inside the line chains of the path
                 # - determine the inside of the line chain
@@ -854,7 +873,7 @@ class Compiler:
                     # delta line chain is inside or outside the base line chain, but when we compare
                     # the bbox sizes we know.
                     # Note that this method can be used to determine if a line chain is drawn clockwise
-                    # or anti-clockwise because a posive delta offset should be 'outside' the line chain
+                    # or anti-clockwise because a positive delta offset should be 'outside' the line chain
                     # in this case (depending on the definition/calculation of the delta function).
                     # we can use this to implement the other svg fill rule: 'nonzero'.
                     bbox = Boundingbox()
