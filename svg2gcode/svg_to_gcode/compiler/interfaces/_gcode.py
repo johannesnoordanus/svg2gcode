@@ -154,22 +154,22 @@ class Gcode(Interface):
 
         return command + ''
 
-    def laser_off(self):
+    def laser_off(self, fan_off = True):
         self._laser_mode = 'M5'
         self._laser_mode_changed = True
-        new_mode = "M5" + ("\nM9" if self._machine_params['fan'] else '') # laser off, (fan off when available)
+        new_mode = "M5" + ("\nM9" if self._machine_params['fan'] and fan_off else '') # laser off, (fan off when available)
         return f"{new_mode}"
 
-    def set_laser_power(self, power):
+    def set_laser_power(self, power, fan_on = True):
         print("laser power!")
         if power < 0 or power > 1:
             raise ValueError(f"{power} is out of bounds. Laser power must be given between 0 and 1. "
                              f"The interface will scale it correctly.")
 
 	# set power for next linear move
-        return self.set_laser_power_value(int(linear_map(self._machine_params['minimum_laser_power'], self._machine_params['maximum_laser_power'], power)))
+        return self.set_laser_power_value(int(linear_map(self._machine_params['minimum_laser_power'], self._machine_params['maximum_laser_power'], power)), fan_on)
 
-    def set_laser_power_value(self, machine_value) -> str:
+    def set_laser_power_value(self, machine_value, fan_on = True) -> str:
         """
         Set laser power directly - in target machine values - not as a fraction.
         """
@@ -177,7 +177,7 @@ class Gcode(Interface):
         self._next_laser_power = machine_value
 
         # (fan on when available), laser_on
-        new_mode = ("\nM8" if self._machine_params['fan'] else '') + ("\n" + self._laser_mode if self._laser_mode_changed else '')
+        new_mode = ("\nM8" if self._machine_params['fan'] and fan_on else '') + ("\n" + self._laser_mode if self._laser_mode_changed else '')
         self._laser_mode_changed = False
 	# return laser mode (M3 constant laser power or M4 dynamic laser power) when laser mode changed
         return f"; F{self._next_speed} {self._unit}/min, power S{machine_value}{new_mode}"

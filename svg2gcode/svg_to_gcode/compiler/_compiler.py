@@ -66,6 +66,9 @@ class Compiler:
 
         self.interface.set_machine_parameters(self.settings)
 
+        # toggle
+        self.fan_on = self.settings['fan']
+
         if custom_header is None:
             custom_header = []
 
@@ -77,7 +80,7 @@ class Compiler:
                        self.interface.set_distance_mode(self.settings["distance_mode"])] + custom_header
         self.footer = custom_footer
 
-        # path object gcode
+        # path gcode
         self.body: list[str] = []
         # image gcode
         self.gcode: list[str] = []
@@ -128,12 +131,13 @@ class Compiler:
 
         :param passes: the number of passes that should be made. Every pass the machine moves_down (z-axis) by
         self.pass_depth and self.body is repeated.
-        :return returns the assembled code. self.header + [self.body, -self.pass_depth] * passes + self.footer
+        :return returns the assembled g-code. [self.body, -self.pass_depth] * passes
         """
         if len(self.body) == 0:
             logger.debug("Compile with an empty body (no curves).")
             return ''
 
+        fan_off = False
         gcode = []
         for i in range(passes):
             gcode += [f"; pass #{i+1}"]
@@ -141,12 +145,10 @@ class Compiler:
 
             if i < (passes - 1) and self.settings["pass_depth"] > 0:
                 # If it isn't the last pass, turn off the laser and move down
-                gcode.append(self.interface.laser_off())
+                gcode.append(self.interface.laser_off(fan_off))
                 gcode.append(self.interface.set_relative_coordinates())
                 gcode.append(self.interface.linear_move(z=-self.settings["pass_depth"]))
                 gcode.append(self.interface.set_distance_mode(self.settings["distance_mode"]))
-
-        gcode += [self.interface.laser_off()]
 
         # remove all ""
         gcode = filter(lambda command: len(command) > 0, gcode)
@@ -160,11 +162,12 @@ class Compiler:
         """
 
         # laser off, fan on, M3 or M4 burn mode
-        header_gc = ["M5","M8", 'M3' if self.settings["laser_mode"] == "constant" else 'M4']
-        # laser off, fan off
-        footer_gc = ["M5","M9"]
+        header_gc = ["M5"]
+        if self.settings['fan'] and self.settings["splitfile"]:
+            header_gc += ['M8']
+        header_gc += ['M3' if self.settings["laser_mode"] == "constant" else 'M4']
 
-        return '\n'.join(header_gc + self.gcode + footer_gc)
+        return '\n'.join(header_gc + self.gcode)
 
     def compile_to_file(self, file_name: str, svg_file_name: str, curves: list[Curve], passes=1):
         """
@@ -182,15 +185,17 @@ class Compiler:
         self.append_curves(curves)
 
         header = '\n'.join(self.header) + '\n'
+        footer = '\n'.join(self.footer) + '\n'
 
         if len(self.body) > 0:
             # write path objects
             with open(file_name, 'w') as file:
-                emit_program_end = self.interface.program_end() if (self.settings["splitfile"] or len(self.gcode) == 0) else ""
-                file.write(self.gcode_file_header() + header + self.compile(passes=passes) + '\n' + emit_program_end)
+                #emit_program_end = self.interface.program_end() if (self.settings["splitfile"] or len(self.gcode) == 0) else ""
+                program_end = footer if (self.settings["splitfile"] or len(self.gcode) == 0) else ""
+                file.write(self.gcode_file_header() + header + self.compile(passes=passes) + '\n' + program_end)
                 logger.info(f"Generated {file_name}")
         else:
-            logger.warn(f'No path (curve) data found, skipping "{file_name}"')
+            logger.warn(f'No path (curve) data found nothing added to "{file_name}"')
 
         image_file_name = file_name.rsplit('.',1)[0] + "_images." + file_name.rsplit('.',1)[1]
         if len(self.gcode) == 0:
@@ -202,13 +207,13 @@ class Compiler:
             if self.settings["splitfile"]:
                 # emit image objects to <filename>_images.<gcext>
                 with open(image_file_name, 'w') as file:
-                    file.write(self.gcode_file_header() + header +  self.compile_images() + '\n' + self.interface.program_end() + '\n')
+                    file.write(self.gcode_file_header() + header + self.compile_images() + '\n' + footer)
                     logger.info(f"Generated {image_file_name}")
             else:
                 # emit images objects in same file
                 open_mode = 'w' if len(self.body) == 0 else 'a+'
                 with open(file_name, open_mode) as file:
-                    file.write((self.gcode_file_header() if len(self.body) == 0 else "") + '\n' +  self.compile_images() + '\n' + self.interface.program_end() + '\n')
+                    file.write((self.gcode_file_header() if len(self.body) == 0 else "") + '\n' +  self.compile_images() + '\n' + footer)
                     logger.info(f"Added image(s) to {file_name}")
 
     def append_line_chain(self, line_chain: LineSegmentChain, step: float, color: int = None, speed: int = None):
@@ -233,20 +238,24 @@ class Compiler:
         laser_power = color if color is not None else self.settings["laser_power"]
         movement_speed = speed if speed is not None else self.settings["movement_speed"]
 
+        # do not turn fan off
+        fan_off = False
+
 	# Move to the next line_chain when the next line segment doesn't connect to the end of the previous one.
         if self.interface.position is None or abs(self.interface.position - start) > TOLERANCES["operation"]:
             if self.interface.position is None or self.settings["rapid_move"]:
                 # move to the next line_chain: set laser off, rapid move to start of chain,
                 # set movement (cutting) speed, set laser mode and power on
-                code += [self.interface.laser_off(), self.interface.rapid_move(start.x, start.y),
+                code += [self.interface.laser_off(fan_off), self.interface.rapid_move(start.x, start.y),
                         self.interface.set_movement_speed(movement_speed),
-                        self.interface.set_laser_mode(self.settings["laser_mode"]), self.interface.set_laser_power_value(laser_power)]
+                        self.interface.set_laser_mode(self.settings["laser_mode"]), self.interface.set_laser_power_value(laser_power,self.fan_on)]
             else:
                 # move to the next line_chain: set laser mode, set laser power to 0 (cutting is off),
                 # set movement speed, (no rapid) move to start of chain, set laser to power
-                code += [self.interface.set_laser_mode(self.settings["laser_mode"]), self.interface.set_laser_power_value(0),
+                code += [self.interface.set_laser_mode(self.settings["laser_mode"]), self.interface.set_laser_power_value(0,self.fan_on),
                         self.interface.set_movement_speed(movement_speed), self.interface.linear_move(start.x, start.y),
                         self.interface.set_laser_power_value(laser_power)]
+            self.fan_on = False
 
             self.boundingbox.update(start)
 
