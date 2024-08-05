@@ -8,4 +8,4 @@ specific maintenance notes:
 
 from svg2gcode.svg_to_gcode.svg_parser._transformation import Transformation
 from svg2gcode.svg_to_gcode.svg_parser._path import Path
-from svg2gcode.svg_to_gcode.svg_parser._parser_methods import parse_file, parse_string, parse_root
+from svg2gcode.svg_to_gcode.svg_parser._parser_methods import parse_file, parse_string, parse_root, NAMESPACES, ElementTree_MY_PARENT

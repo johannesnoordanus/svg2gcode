@@ -11,6 +11,23 @@ from svg2gcode.svg_to_gcode.geometry import Curve, RasterImage
 NAMESPACES = {'svg': 'http://www.w3.org/2000/svg',
               'xlink':'http://www.w3.org/1999/xlink'}
 
+ElementTree_MY_PARENT = '__my_parent__'
+
+def addParentInfo(et):
+    for child in et:
+        child.attrib[ElementTree_MY_PARENT] = et
+        addParentInfo(child)
+
+def stripParentInfo(et):
+    for child in et:
+        child.attrib.pop(ElementTree_MY_PARENT, 'None')
+        stripParentInfo(child)
+
+def getParent(et):
+    if ElementTree_MY_PARENT in et.attrib:
+        return et.attrib[ElementTree_MY_PARENT]
+    else:
+        return None
 
 def _has_style(element: ElementTree.Element, key: str, value: str) -> bool:
     """
@@ -178,8 +195,7 @@ def parse_root(root: ElementTree.Element, transform_origin=True, viewbox=None, d
                                add_viewbox_transformation(transformation, transform_origin, viewbox, origin, scale, rotate))
 
                 curves.extend(path.curves)
-            else:
-                if element.tag == "{%s}image" % NAMESPACES["svg"]:
+            elif element.tag == "{%s}image" % NAMESPACES["svg"]:
                     # svg image
 
                     # instantiate curve (image)
@@ -209,6 +225,7 @@ def parse_string(svg_string: str, transform_origin=True, viewbox=None, draw_hidd
     :return: A list of geometric curves describing the svg. Use the Compiler sub-module to compile them to gcode.
     """
     root = ElementTree.fromstring(svg_string)
+    addParentInfo(root)
     return parse_root(root, transform_origin, viewbox, draw_hidden, origin=delta_origin, scale=scale_factor, rotate=rotate_deg)
 
 
@@ -227,4 +244,5 @@ def parse_file(file_path: str, transform_origin=True, viewbox=None, draw_hidden=
     :return: A list of geometric curves describing the svg. Use the Compiler sub-module to compile them to gcode.
     """
     root = ElementTree.parse(file_path).getroot()
+    addParentInfo(root)
     return parse_root(root, transform_origin, viewbox, draw_hidden, origin=delta_origin, scale=scale_factor, rotate=rotate_deg)

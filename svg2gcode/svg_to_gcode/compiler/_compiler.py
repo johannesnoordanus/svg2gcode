@@ -19,6 +19,7 @@ from svg2gcode.svg_to_gcode import DEFAULT_SETTING
 from svg2gcode.svg_to_gcode import TOLERANCES, SETTING, check_setting
 
 from svg2gcode.svg_to_gcode import css_color
+from svg2gcode.svg_to_gcode.svg_parser import NAMESPACES, ElementTree_MY_PARENT
 
 from svg2gcode import __version__
 
@@ -481,6 +482,25 @@ class Compiler:
         if 'gcode_pathcut' in curve.path_attrib:
             style['pathcut'] = curve.path_attrib['gcode_pathcut']
 
+        # check missing attributes, if any
+        if ElementTree_MY_PARENT in curve.path_attrib:
+            parent = curve.path_attrib[ElementTree_MY_PARENT]
+
+            # find first parent g (group) tag, if any
+            while parent and parent.tag != "{%s}g" % NAMESPACES["svg"]:
+                if ElementTree_MY_PARENT in parent.attrib:
+                    parent = parent.attrib[ElementTree_MY_PARENT]
+                else:
+                    parent = None
+            if parent:
+                # fill in missing attribues, if any
+                for key, value in style.items():
+                    if not value and key in ['fill', 'fill-rule', 'fill-opacity', 'stroke', 'stroke-width', 'stroke-opacity']:
+                        # get missing attribute (if any)
+                        if key in parent.attrib:
+                            attrib = parent.attrib[key]
+                            if attrib and attrib != 'none':
+                                style[key] = attrib
         return style
 
     def color_coded_paths(self, set_color_coded = False) -> ():
