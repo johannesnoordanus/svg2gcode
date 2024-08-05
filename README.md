@@ -1,6 +1,6 @@
 # svg2gcode
 
-*svg2gcode* is a *WYSIWYG* converter of Scalable Vector Graphic *(SVG)* drawings. It is based on library *SvgToGcode* (*fork*: *https://github.com/johannesnoordanus/SvgToGcode*)<sup>(*)</sup>.
+*svg2gcode* is a *WYSIWYG* converter of Scalable Vector Graphic *(SVG)* drawings. It is based on library *SvgToGcode* (*https://github.com/johannesnoordanus/SvgToGcode*)<sup>(*)</sup>.
 
 Drawings and images can be composed using Inkscape (or other *SVG* image software), saved to a *.svg* file and - *WYSIWYG* - converted to gcode.
 Color coding can be used to mark what part(s) of the drawing to cut, engrave or even ignore.
@@ -17,13 +17,16 @@ More info can be obtained by looking at the documentation and examples below and
 
 *svg2gcode* has three related programs: *image2gcode* mentioned above has similar capabilities but handles raster image files (like *png* and *jpg*) directly, *gcode2image* performs the inverse function and is capable of showing multiple writes (burns) to the same location and last *grblhud* which gives full control over gcode execution.
 
+<sup>(*)</sup> Note that an upgraded and corrected version of this library is included.
+
  -----
 
 Please consider supporting me, so I can make this application better and add new functionality to it: <http://paypal.me/johannesnoordanus/5,00>
 
 My next update will add *fill-rule* 'nonzero' (see information on *fill-rule* below).
 
-<sup>(*)</sup> Note that an upgraded and corrected version of this library is included. 
+ -----
+
 ### Supported SVG elements and attributes
 
 *SVG* *path* and *image* elements (specific: ```<svg:path ..>```tags and images```<svg:image ..>```tags) are supported. Other drawing objects must be converted to a *path* first to be able to translate them to a gcode sequence.
@@ -31,6 +34,25 @@ My next update will add *fill-rule* 'nonzero' (see information on *fill-rule* be
 Attributes *stroke* (color), *stroke-width*, *stroke_alpha*, *fill* (color), *fill-rule*, *fill_alpha* are supported.
 Currently only value *evenodd* of *fill-rule* is supported.
 
+### *WYSIWYG*
+
+As seen above, not all *svg* elements are directly supported, but they are after a *path* conversion within the composer (Inkscape: ```menu Path->Object/Stroke to Path```). Without a *path* conversion *svg2gcode* simply ignores all elements except *path* and *image*. Text (fonts) require another step after *selecting* all text and clicking menu ```Object to Path```. Clicking ```menu Object->Ungroup``` generates a separate *path* for each letter which contains all relevant attributes. (Otherwise Inkscape uses a group tag ```<g``` to set some attributes for all letters within the text that are not repeated for each individual letter.)
+
+Note that the latest version of *svg2gcode* (3.3.3) has support for ```<g``` tags (attribute inheritance) and is able to correctly convert text without ```Ungroup```.
+
+You can use *gcode2image* to check the conversion result:
+```
+> svg2gcode some.svg some.gc
+> gcode2image --showimage --flip --grid --showorigin some.gc some.png
+```
+The image shown should be the same as the one shown by the composer (Inkscape). This is also a good way to measure the conversion result. Note that ```--grid``` and ```--showorigin``` can give some inteference. To be sure run *gcode2image* without them.
+
+#### Notes:
+ - drawing objects - within the composer - must be converted to a```path```to be translated to a gcode sequence
+ - image objects should **not** be converted to a ```path```
+ - images must be linked or embedded using base64 (Inkscape default).
+ - images can be in several formats (my tests included *.png* and  *.jpg* image files)
+ - *SVG* source documents must be in unit 'mm' and set to ```1 'user unit' is 1 mm``` (Inkscape default)
 ### Important Commandline options
 
 Option ```--color_coded``` can be used to specify what part(s) of the drawing to cut, engrave or even ignore. 
@@ -76,7 +98,7 @@ Note that engraving is the default action, so if option *color_coded* isn't set 
 
 This makes it possible to make a drawing where all path elements are drawn in their respective colors to make an engraving of the entire vector drawing.
 When you set the engrave action for a set of colors, only those colors will be engraved (having their respective colors), all other paths having no action set are ignored.
-Also, when a path has no stroke attribute (or it is set to none) the element cannot be engraved (because it has no color) so it is interpreted as a cut action.
+Also, when a path has no stroke attribute (or it is set to none) the element cannot be engraved (because it has no color) so it is ignored.
 
 Option ```--pathcut``` can be used to override all stroke attributes and force cutting of all *paths* of the *SVG*.
 Note that this option cannot be set at the same time as *--color_coded* above.
@@ -107,7 +129,6 @@ General optimizations
 - borders are drawn in parallel and in one go, following the *path* coordinates.
 - fill has support for alpha channel and 'fill-opacity'
  
-
 ### Install:
 ```
 > 
@@ -332,10 +353,3 @@ One containing the drawings of the .svg, the other containing the images:
 ### Burn mode M3/M4:
 
 Default *svg2gcode* uses constant burn mode *M3*. This can be changed by setting option *--no-constantburn* which selects burn mode *M4*. Mode *M4* is not suitable for engravings because it automatically compensates (laser)power for speed. This conflicts with the specific gcode settings given by *image2gcode* (called by *svg2gcode*) for each pixel. In fact some experiments show that *M4* causes loss of quality and image deterioration when speed is increased. On white oak images had too much black and grey which did not go away for substantially higher speed. When switched back to constant burn (*M3*) mode, the same high speed gave excellent images having a sepia (licht yellow brown) color tone.
-
-### Notes:
- - drawing objects - within the composer - must be converted to a```path```to be translated to a gcode sequence
- - also, image objects should **not** be converted to a ```path```
- - images must be linked or embedded using base64.
- - images can be in several formats (my tests included *.png* and  *.jpg* image files)
- - SVG source documents must be in unit 'mm' (and set to 1 'user unit' is 1 mm) which is the default for Inkscape (check document settings and look at the 'scaling' parameter)
