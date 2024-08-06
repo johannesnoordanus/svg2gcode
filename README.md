@@ -36,9 +36,7 @@ Currently only value *evenodd* of *fill-rule* is supported.
 
 ### *WYSIWYG*
 
-As seen above, not all *svg* elements are directly supported, but they are after a *path* conversion within the composer (Inkscape: ```menu Path->Object/Stroke to Path```). Without a *path* conversion *svg2gcode* simply ignores all elements except *path* and *image*. Text (fonts) require another step after *selecting* all text and clicking menu ```Object to Path```. Clicking ```menu Object->Ungroup``` generates a separate *path* for each letter which contains all relevant attributes. (Otherwise Inkscape uses a group tag ```<g``` to set some attributes for all letters within the text that are not repeated for each individual letter.)
-
-Note that the latest version of *svg2gcode* (3.3.3) has support for ```<g``` tags (attribute inheritance) and is able to correctly convert text without ```Ungroup```.
+As seen above, not all *svg* elements are directly supported, but they are after a *path* conversion within the composer (Inkscape: ```menu Path->Object/Stroke to Path```). Without a *path* conversion *svg2gcode* simply ignores all elements except *path* and *image*. Text (fonts) require another step after *selecting* all text and clicking menu ```Object to Path```. Clicking menu```Object->Ungroup``` <sup>(**)</sup> generates a separate *path* for each letter which contains all relevant attributes. (Otherwise Inkscape uses a group tag ```<g``` to set some attributes for all letters within the text that are not repeated for each individual letter.) 
 
 You can use *gcode2image* to check the conversion result:
 ```
@@ -47,12 +45,30 @@ You can use *gcode2image* to check the conversion result:
 ```
 The image shown should be the same as the one shown by the composer (Inkscape). This is also a good way to measure the conversion result. Note that ```--grid``` and ```--showorigin``` can give some inteference. To be sure run *gcode2image* without them.
 
-#### Notes:
+#### Contour & fill
+
+Inkscape translates a contour of a raster image to an outline and fill. So, if you create a contour via (select bitmap first) ```Path->Trace Bitmap...``` slide the ```Treshold``` of the Trace Bitmap menu to almost 1 (0,995) to make the entire bitmap image black (this is a bit *trial and error*, use ```Update preview``` to get the highest slider value before the whole images is black).
+
+You can look at the result xml tree via Inkscapes ```XML editor``` which now shows a path for the outline of the raster image and a style attribue like this:
+```
+style           fill:#000000;stroke-width:0.172652
+```
+To cut this outline, you can set the *fill* attribute to *none* (via the ```XML editor``` or menu ```Fill and Stroke```) and set a specific *stroke* color, for example *red*. The following command generates gcode to cut the outline.
+```
+> svg2gcode --color_coded "red = cut" contour.svg contour.gc
+```
+You can also engrave the whole bitmap image by setting a specific fill color (via menu ```Fill and Stroke```) (in this case there is no need to use option ```color_coded```)
+
+#### Notes
+
  - drawing objects - within the composer - must be converted to a```path```to be translated to a gcode sequence
  - image objects should **not** be converted to a ```path```
  - images must be linked or embedded using base64 (Inkscape default).
  - images can be in several formats (my tests included *.png* and  *.jpg* image files)
  - *SVG* source documents must be in unit 'mm' and set to ```1 'user unit' is 1 mm``` (Inkscape default)
+
+<sup>(**)</sup> Note that the latest version of *svg2gcode* (3.3.4) has support for ```<g``` tags (attribute inheritance) and is able to correctly convert text without ```Ungroup```.
+
 ### Important Commandline options
 
 Option ```--color_coded``` can be used to specify what part(s) of the drawing to cut, engrave or even ignore. 
@@ -353,3 +369,4 @@ One containing the drawings of the .svg, the other containing the images:
 ### Burn mode M3/M4:
 
 Default *svg2gcode* uses constant burn mode *M3*. This can be changed by setting option *--no-constantburn* which selects burn mode *M4*. Mode *M4* is not suitable for engravings because it automatically compensates (laser)power for speed. This conflicts with the specific gcode settings given by *image2gcode* (called by *svg2gcode*) for each pixel. In fact some experiments show that *M4* causes loss of quality and image deterioration when speed is increased. On white oak images had too much black and grey which did not go away for substantially higher speed. When switched back to constant burn (*M3*) mode, the same high speed gave excellent images having a sepia (licht yellow brown) color tone.
+
