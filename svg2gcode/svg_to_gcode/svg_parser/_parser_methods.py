@@ -11,21 +11,21 @@ from svg2gcode.svg_to_gcode.geometry import Curve, RasterImage
 NAMESPACES = {'svg': 'http://www.w3.org/2000/svg',
               'xlink':'http://www.w3.org/1999/xlink'}
 
-ElementTree_MY_PARENT = '__my_parent__'
+ElementTreeParent = '__parent__'
 
 def addParentInfo(et):
     for child in et:
-        child.attrib[ElementTree_MY_PARENT] = et
+        child.attrib[ElementTreeParent] = et
         addParentInfo(child)
 
 def stripParentInfo(et):
     for child in et:
-        child.attrib.pop(ElementTree_MY_PARENT, 'None')
+        child.attrib.pop(ElementTreeParent, 'None')
         stripParentInfo(child)
 
 def getParent(et):
-    if ElementTree_MY_PARENT in et.attrib:
-        return et.attrib[ElementTree_MY_PARENT]
+    if ElementTreeParent in et.attrib:
+        return et.attrib[ElementTreeParent]
     else:
         return None
 

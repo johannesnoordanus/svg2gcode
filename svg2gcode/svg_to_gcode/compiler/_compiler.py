@@ -19,7 +19,7 @@ from svg2gcode.svg_to_gcode import DEFAULT_SETTING
 from svg2gcode.svg_to_gcode import TOLERANCES, SETTING, check_setting
 
 from svg2gcode.svg_to_gcode import css_color
-from svg2gcode.svg_to_gcode.svg_parser import NAMESPACES, ElementTree_MY_PARENT
+from svg2gcode.svg_to_gcode.svg_parser import NAMESPACES, ElementTreeParent
 
 from svg2gcode import __version__
 
@@ -483,13 +483,13 @@ class Compiler:
             style['pathcut'] = curve.path_attrib['gcode_pathcut']
 
         # check missing attributes, if any
-        if ElementTree_MY_PARENT in curve.path_attrib:
-            parent = curve.path_attrib[ElementTree_MY_PARENT]
+        if ElementTreeParent in curve.path_attrib:
+            parent = curve.path_attrib[ElementTreeParent]
 
-            # find first parent g (group) tag, if any
+            # find first parent <g (group) tag, if any
             while parent and parent.tag != "{%s}g" % NAMESPACES["svg"]:
-                if ElementTree_MY_PARENT in parent.attrib:
-                    parent = parent.attrib[ElementTree_MY_PARENT]
+                if ElementTreeParent in parent.attrib:
+                    parent = parent.attrib[ElementTreeParent]
                 else:
                     parent = None
             if parent:
