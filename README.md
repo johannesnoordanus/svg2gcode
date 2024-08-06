@@ -316,11 +316,8 @@ Note: to get options and defaults:
     > svg2gcode --help
 ```
 #### How do we cut these lines?
-Change the *style* attribute line - within file *line_hoek.svg* - to the following:
-```
-    style="fill:none;stroke:none;stroke-width:.1"
-```
-or add 'gcode-pathcut' to the style string: 
+
+Add 'gcode-pathcut' to the style string: 
 ```
     style="fill:none;stroke:red;stroke-width:.1;gcode-pathcut:true"
 ```
