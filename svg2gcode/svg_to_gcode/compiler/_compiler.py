@@ -671,7 +671,7 @@ class Compiler:
         def get_style_info_of_line_chain(line_chain: LineSegmentChain) -> ():
             """
             Get style info of line_chain.
-            Returns tuple (stroke_width, stroke_color, stroke_alpha, fill_color, fill_alpha, fill_rule)
+            Returns tuple (stroke_width, stroke_color, stroke_alpha, fill_color, fill_alpha, fill_rule, pathcut)
             """
             # defaults
             stroke_width = 0
@@ -685,8 +685,7 @@ class Compiler:
             first_line_of_chain = line_chain.get(0)
             style = self.parse_style_attribute(first_line_of_chain)
             if style:
-                if not (style['pathcut'] == 'true' or self.settings["pathcut"]) \
-                    and style['stroke'] is not None and style['stroke'] != "none":
+                if style['stroke'] is not None and style['stroke'] != "none":
                     stroke_color = style['stroke']
                     if style['stroke-opacity'] is not None:
                         # fill opacity attribute overrides rgba property
@@ -721,7 +720,7 @@ class Compiler:
                             fill_alpha = rgba[3]
                     fill_color = round(fill_color * fill_alpha)
 
-            return (stroke_width, stroke_color, stroke_alpha, fill_color, fill_alpha, fill_rule)
+            return (stroke_width, stroke_color, stroke_alpha, fill_color, fill_alpha, fill_rule, style['pathcut'])
 
 
         path_curves = {}
@@ -776,9 +775,13 @@ class Compiler:
             # Render svg 'stroke' attribute
             for line_chain in path_curves[name_id]:
                 # get style info
-                stroke_width, stroke_color, stroke_alpha, fill_color, fill_alpha, fill_rule = get_style_info_of_line_chain(line_chain)
+                stroke_width, stroke_color, stroke_alpha, fill_color, fill_alpha, fill_rule, style_pathcut = get_style_info_of_line_chain(line_chain)
 
-                if len(stroke_color):
+                if (style_pathcut is not None and style_pathcut == 'true') or self.settings["pathcut"]:
+                    # cut path
+                    self.body.extend([f"\n; cut path (pathcut set) '{name_id}'"])
+                    render_pathwidth(line_chain, [0], None, None, boundingbox)
+                elif len(stroke_color):
 
                     # Get stroke alpha channel (opacity)
                     # fill opacity attribute overrides rgba property
@@ -840,13 +843,12 @@ class Compiler:
                                     if not (delta == stroke_width and stroke_width % 2 != 0):
                                         steps.append(round(-delta * pixel_size, self.precision))
 
-                        # color_coded isn't set: with path color engrave path
-                        self.body.extend([f"\n; engrave path '{name_id}', color '{stroke_color}'"])
+                        # color_coded isn't set: engrave path with stroke color
+                        self.body.extend([f"\n; default action: engrave path '{name_id}', color '{stroke_color}'"])
                         render_pathwidth(line_chain, steps, inverse_bw, speed, boundingbox)
                 else:
-                    # line stroke isn't set: ignore path
-                    self.body.extend([f"\n; no stroke color set: ignore path '{name_id}'"])
-                    #render_pathwidth(line_chain, [0], None, None, boundingbox)
+                    # cannot engrave path (ignore)
+                    self.body.extend([f"\n; cannot engrave path (ignore) no stroke color set: path '{name_id}'"])
 
             # Render svg 'fill' attribute
             #if not self.settings["nofill"] and fill_color is not None and boundingbox.get() is not None:
