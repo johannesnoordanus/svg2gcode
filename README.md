@@ -21,7 +21,8 @@ More info can be obtained by looking at the documentation and examples below and
 
  -----
 
-Please consider supporting me, so I can make this application better and add new functionality to it: <http://paypal.me/johannesnoordanus/5,00>
+If you find this application useful, please consider donating, so I can continue maintaining and enhancing it.<br>
+<http://paypal.me/johannesnoordanus/5,00>
 
 My next update will add *fill-rule* 'nonzero' (see information on *fill-rule* below).
 
