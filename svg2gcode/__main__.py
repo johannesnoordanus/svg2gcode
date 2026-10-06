@@ -5,6 +5,8 @@ svg2gcode: convert an image to gcode.
 import os
 import sys
 import re
+import logging
+import warnings
 try:
     import tomllib
 except ImportError:
@@ -20,6 +22,14 @@ from svg2gcode import __version__
 from svg2gcode.svg_to_gcode import css_color
 
 config_file = os.path.expanduser('~/.config/svg2gcode.toml')
+
+# Set logging global disable flag
+##logging.disable(logging.CRITICAL + 1)
+
+# Set warnings disable flag (use python option -W to enable warnings)
+if not sys.warnoptions:
+    warnings.simplefilter("ignore")
+
 
 # Notes:
 # - drawing objects (when using Inkscape for example) must be converted to a 'path' to be translated in a gcode sequence
@@ -37,24 +47,10 @@ def svg2gcode(args) -> int:
                'maximum_image_laser_power':args.imagepower, 'image_movement_speed':args.imagespeed, 'fan':args.fan,'rapid_move':args.rapidmove,
                'showimage':args.showimage, 'x_axis_maximum_travel':args.xmaxtravel,'y_axis_maximum_travel':args.ymaxtravel, 'image_noise':args.noise,
                'pass_depth':args.pass_depth, 'laser_mode':"constant" if args.constantburn else "dynamic", 'splitfile':args.splitfile, 'pathcut':args.pathcut,
-               'nofill':args.nofill, 'image_poweroffset':args.poweroffset, 'image_overscan':args.overscan, 'image_showoverscan':args.showoverscan,
+               'nofill':args.nofill, 'fillrule':args.fillrule, 'image_poweroffset':args.poweroffset, 'image_overscan':args.overscan, 'image_showoverscan':args.showoverscan,
                'color_coded': args.color_coded,})
 
     compiler = init_compiler(args)
-
-    if args.color_coded != "":
-        # check color_coded argument validity (2)
-        pathignore, pathcut, pathengrave = compiler.color_coded_paths(True)
-
-        # a path color should be in one set only
-        for i in pathignore:
-            if i in pathcut or i in pathengrave:
-                print(f"argument error: '--color_coded \"{args.color_coded}\"' has a path color '{i}' set in multiple categories (cut|engrave|ignore) .")
-                return 1
-        for i in pathcut:
-            if i in pathengrave:
-                print(f"argument error: '--color_coded \"{args.color_coded}\"' has a path color '{i}' set in multiple categories (cut|engrave|ignore) .")
-                return 1
 
     # emit gcode for svg
     if args.selfcenter:
@@ -109,8 +105,10 @@ def main() -> int:
         "pass_depth_default": 0,
         "passes_default": 1,
         "rotate_default": 0,
+        "fillrule_default": "nonzero",
         "colorcoded_default": "",
         "constantburn_default": True,
+        "fan_default": "off"
     }
 
     if os.path.exists(config_file):
@@ -156,14 +154,17 @@ def main() -> int:
     parser.add_argument('--splitfile', action='store_true', default=False, help='split gcode output of SVG path and image objects' )
     parser.add_argument('--pathcut', action='store_true', default=False, help='alway cut SVG path objects! (use laser power set with option --cuttingpower)' )
     parser.add_argument('--nofill', action='store_true', default=False, help='ignore SVG fill attribute' )
+    parser.add_argument('--fillrule', action = 'store', default=cfg["fillrule_default"], metavar="<default:\"" + str(cfg["fillrule_default"])+ "\">",
+         type = str, help = 'set fill rule to [nonzero|evenodd]')
     parser.add_argument('--xmaxtravel', default=cfg["xmaxtravel_default"], metavar="<default:" +str(cfg["xmaxtravel_default"])+ ">",
         type=int, help="machine x-axis lengh in mm")
     parser.add_argument('--ymaxtravel', default=cfg["ymaxtravel_default"], metavar="<default:" +str(cfg["ymaxtravel_default"])+ ">",
         type=int, help="machine y-axis lengh in mm")
-    parser.add_argument( '--color_coded', action = 'store', default=cfg["colorcoded_default"], metavar="<default:\"" + str(cfg["colorcoded_default"])+ "\">",
-         type = str, help = 'set action for path with specific stroke color "[color = [cut|engrave|ignore] *]*"'
-                            ', example: --color_coded "black = ignore purple = cut blue = engrave"' )
-    parser.add_argument('--fan', action='store_true', default=False, help='set machine fan on' )
+    parser.add_argument('--color_coded', action = 'store', default=cfg["colorcoded_default"], metavar="<default:\"" + str(cfg["colorcoded_default"])+ "\">",
+         type = str, help = 'set action for path with specific stroke color "[[color|allothercolors] = [cut|engrave|ignore] *]*"'
+                            ', example: --color_coded "black = ignore purple = cut blue = engrave allothercolors = ignore"' )
+    parser.add_argument('--fan', action = 'store', default=cfg["fan_default"], metavar="<default:\"" + str(cfg["fan_default"])+ "\">",
+         type = str, help = 'set fan [on|off|on_path|on_image]')
     parser.add_argument('-V', '--version', action='version', version='%(prog)s ' + __version__, help="show version number and exit")
 
     args = parser.parse_args()
@@ -173,25 +174,37 @@ def main() -> int:
             if args.pathcut:
                 print("options --color_coded and --pathcut cannot be used at the same time, program abort")
                 return 1
-            # check argument validity (1)
 
-            # category names
-            category = ["cut", "engrave", "ignore"]
-            # get css color names
-            colors = str([*css_color.css_color_keywords])
-            colors = re.sub("(,|\[|\]|\'| )", '', colors.replace(",", "|"))
+            # check color_coded argument validity (1)
 
-            # make a color list
-            colors = colors.split("|")
+            # do a full match to validate the syntax
+            cc = re.sub(",", '', args.color_coded)
+            fm = re.fullmatch("( *[^ ]* *= *(cut|engrave|ignore))+", cc)
+            if not fm:
+                print(f"syntax error in argument: '--color_coded {args.color_coded}', argument should be similar to: "
+                      f"'--color_coded \"black = ignore purple = cut blue = engrave\"'")
+                return 1
 
-            # get all names from color_coded
-            names_regex = "[a-zA-Z]+"
-            match = re.findall(names_regex, args.color_coded)
-            names = [i for i in match]
+            cc = fm.group(0)
 
-            for name in names:
-                if not (name in colors or name in category):
-                    print(f"argument error: '--color_coded {args.color_coded}' has a name '{name}' that does not correspond to a css color or category (cut|engrave|ignore).")
+            # check color_coded argument validity (2)
+            pathignore, pathcut, pathengrave = Compiler.color_coded(cc)
+
+            # a path color should be in one set only
+            for i in pathignore:
+                if i in pathcut or i in pathengrave:
+                    print(f"error in argument: '--color_coded \"{args.color_coded}\"' has a path color '{i}' set in multiple categories (cut|engrave|ignore).")
+                    return 1
+            for i in pathcut:
+                if i in pathengrave:
+                    print(f"error in argument: '--color_coded \"{args.color_coded}\"' has a path color '{i}' set in multiple categories (cut|engrave|ignore).")
+                    return 1
+
+            # check validity of color argument, either "allothercolors" or a valid color value e.g. one of '#hex', 'rgb(', 'rgba(', 'hsl(' and 'hsla(' color schemes.
+            for i in pathignore + pathcut + pathengrave:
+                if not (i == "allothercolors" or css_color.parse_css_color(i, fallback = False, warning = False)):
+                    print(f"error in argument: '--color_coded \"{args.color_coded}\"':")
+                    print(f"- invalid color '{i}', color must be of scheme '#hex', 'rgb', 'rgba', 'hsl', 'hsla' or set to 'allothercolors'.")
                     return 1
 
         if args.origin is not None and args.selfcenter:
@@ -199,12 +212,13 @@ def main() -> int:
             return 1
 
         return svg2gcode(args)
+
     except KeyboardInterrupt:
-        print(f"svg2gcode aborted!")
+        print("svg2gcode aborted!")
+        return 1
     except Exception as error:
         print(error)
-
-    return 1
+        return 1
 
 if __name__ == '__main__':
     sys.exit(main())

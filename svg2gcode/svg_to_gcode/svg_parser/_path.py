@@ -42,7 +42,7 @@ class Path:
         """Parse svg commands (stored in value of the d key) into geometric curves."""
 
         command_key = ''  # A character representing a specific command based on the svg standard
-        command_arguments = []  # A list containing the arguments for the current command_key
+        command_arguments: list[str|float] = [] # A list containing the arguments for the current command_key
 
         number_str = ''  # A buffer used to store numeric characters before conferring them to a number
 

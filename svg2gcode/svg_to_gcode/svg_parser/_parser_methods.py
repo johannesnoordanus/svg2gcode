@@ -1,3 +1,4 @@
+"""Tree functions"""
 import re
 
 from xml.etree import ElementTree
@@ -14,20 +15,22 @@ NAMESPACES = {'svg': 'http://www.w3.org/2000/svg',
 ElementTreeParent = '__parent__'
 
 def addParentInfo(et):
+    """Add parent info to each child."""
     for child in et:
         child.attrib[ElementTreeParent] = et
         addParentInfo(child)
 
 def stripParentInfo(et):
+    """Remove parent info to each child."""
     for child in et:
         child.attrib.pop(ElementTreeParent, 'None')
         stripParentInfo(child)
 
 def getParent(et):
+    """Get parent from tree."""
     if ElementTreeParent in et.attrib:
         return et.attrib[ElementTreeParent]
-    else:
-        return None
+    return None
 
 def _has_style(element: ElementTree.Element, key: str, value: str) -> bool:
     """
@@ -36,7 +39,7 @@ def _has_style(element: ElementTree.Element, key: str, value: str) -> bool:
     return element.get(key) == value or (element.get("style") and f"{key}:{value}" in element.get("style"))
 
 
-def add_viewbox_transformation(transformation: Transformation, transform_origin, vwbox, origin, scale, rotate):
+def add_viewbox_transformation(transformation: None | Transformation, transform_origin, vwbox, origin, scale, rotate):
     """
     Transform SVG coordinate system to a math-cartesion coordinate system and correct its origin.
     When viewBox is missing the 'height' value of the viewport is used.
@@ -108,7 +111,7 @@ def add_viewbox_transformation(transformation: Transformation, transform_origin,
 
     return up_transformation
 
-def get_viewBox(root: ElementTree.Element) -> {}:
+def get_viewBox(root: ElementTree.Element) -> dict[str,float]:
     """
     Get viewBox info.
     """
@@ -118,7 +121,7 @@ def get_viewBox(root: ElementTree.Element) -> {}:
 
     if root_vwbox:
         # viewBox info in user-units (Inkscape defaults to 'user-unit' in mm: 1 user-unit is 1 mm).
-        vwbox["x"], vwbox["y"], vwbox["width"], vwbox["height"] = re.findall("\-?[0-9]+\.?[0-9]*", root_vwbox)
+        vwbox["x"], vwbox["y"], vwbox["width"], vwbox["height"] = re.findall(r"\-?[0-9]+\.?[0-9]*", root_vwbox)
 
         # viewBox "x" and "y" represent the upper left corner of the document.
         # note that viewBox parameters should not have unit letters (they are 'in' user-units)
@@ -134,7 +137,7 @@ def get_viewBox(root: ElementTree.Element) -> {}:
 
 
 def parse_root(root: ElementTree.Element, transform_origin=True, viewbox=None, draw_hidden=False,
-               visible_root=True, root_transformation=None, origin=None, scale=None, rotate=None) -> List[Curve]:
+               visible_root=True, root_transformation: None | Transformation = None, origin = None, scale=None, rotate=None) -> List[Curve]:
 
     """
     Recursively parse an etree root's children into geometric curves.
@@ -196,12 +199,12 @@ def parse_root(root: ElementTree.Element, transform_origin=True, viewbox=None, d
 
                 curves.extend(path.curves)
             elif element.tag == "{%s}image" % NAMESPACES["svg"]:
-                    # svg image
+                # svg image
 
-                    # instantiate curve (image)
-                    ri = RasterImage(element.attrib, element.attrib["{%s}href" % NAMESPACES["xlink"]],
-                                add_viewbox_transformation(transformation, transform_origin, viewbox, origin, scale, rotate))
-                    curves.append(ri)
+                # instantiate curve (image)
+                ri = RasterImage(element.attrib, element.attrib["{%s}href" % NAMESPACES["xlink"]],
+                                    add_viewbox_transformation(transformation, transform_origin, viewbox, origin, scale, rotate))
+                curves.append(ri)
 
         # Continue recursion
         curves.extend(parse_root(element, transform_origin, viewbox, draw_hidden, visible, transformation, origin, scale, rotate))

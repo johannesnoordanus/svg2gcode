@@ -1,10 +1,9 @@
 """
     css color module
     currently only partially implemented
-    (definition from  https://www.w3.org/TR/css-color-3/)
+    (definitions from  https://www.w3.org/TR/css-color-3/)
 """
 import logging
-import math
 import re
 
 logging.basicConfig(format="[%(levelname)s] %(message)s")
@@ -161,7 +160,7 @@ css_color_keywords = {
     "yellowgreen": { "hex": "#9ACD32", "decimal": [154,205,50] },
 }
 
-def hsl2rgb(hue, sat, light) -> [int,int,int]:
+def hsl2rgb(hue, sat, light) -> list[int]:
     """
         Convert 'hsl(' color notation to rgb.
         (definition from  https://www.w3.org/TR/css-color-3/)
@@ -170,7 +169,7 @@ def hsl2rgb(hue, sat, light) -> [int,int,int]:
     """
     hue = hue % 360
 
-    if (hue < 0):
+    if hue < 0:
         hue += 360
 
     sat /= 100
@@ -183,8 +182,13 @@ def hsl2rgb(hue, sat, light) -> [int,int,int]:
 
     return [f(0), f(8), f(4)]
 
-def hex2rgb(hexcolor: str) -> [int,int,int]:
-
+def hex2rgb(hexcolor: str) -> list[int]:
+    """
+        Convert 'hex(' color notation to rgb.
+        (definition from  https://www.w3.org/TR/css-color-3/)
+        It returns an array of three numbers representing the red, green, and blue channels of the colors, normalized to the range [0, 1]
+        (This means the return values for r,g and b must be multiplied by the color range (0..255) to get the actual rgb values)
+    """
     rgbcolor = int(hexcolor, 16)
     r = rgbcolor >> 16
     g = rgbcolor >> 8 & 255
@@ -192,20 +196,20 @@ def hex2rgb(hexcolor: str) -> [int,int,int]:
 
     return [r,g,b]
 
-def parse_css_color(color: str) -> [int,int,int,float]:
+def parse_css_color(color: str, fallback = True, warning = True) -> int | list[int]:
     """
         parse css color to rgb
         (definition from  https://www.w3.org/TR/css-color-3/)
 
         accept '#hex', 'rgb(', 'rgba(', 'hsl(' and 'hsla(' color schemes.
     """
-    float_re = '(\d*\.)?\d+'
-    rgbcolor = 0
+    float_re = r'(\d*\.)?\d+'
+    rgbcolor: int | list[int] = 0
 
     if color in css_color_keywords:
         rgbcolor = css_color_keywords[color]["decimal"]
     else:
-        hexcolor = re.search('#[A-Fa-f0-9]+', color)
+        hexcolor = re.match('^#[A-Fa-f0-9]+$', color)
         if hexcolor:
             hexcolor = re.search('[A-Fa-f0-9]+', hexcolor.group(0)).group(0)
             if len(hexcolor) == 3:
@@ -213,12 +217,12 @@ def parse_css_color(color: str) -> [int,int,int,float]:
 
             rgbcolor = hex2rgb(hexcolor)
         else:
-            rgba = re.search(f"rgb(a)?\([0-9]+,[0-9]+,[0-9]+(,{float_re})?", color)
+            rgba = re.search(fr"rgb(a)?\([0-9]+,[0-9]+,[0-9]+(,{float_re})?", color)
             # '(\d*\.)?\d+'
             if rgba:
                 # set alpha to non transparant
                 a = 1
-                rgb = re.search(f"\([0-9]+,[0-9]+,[0-9]+(,{float_re})?", rgba.group(0)).group(0)[1:]
+                rgb = re.search(fr"\([0-9]+,[0-9]+,[0-9]+(,{float_re})?", rgba.group(0)).group(0)[1:]
 
                 commas_pos = [cpos for cpos, char in enumerate(rgb) if char == ',']
                 r = int(rgb[0:commas_pos[0]])
@@ -233,11 +237,11 @@ def parse_css_color(color: str) -> [int,int,int,float]:
                 rgbcolor = [r,g,b,a]
 
             else:
-                hsla = re.search(f"hsl(a)?\([0-9]+,[0-9]+,[0-9]+(,{float_re})?", color)
+                hsla = re.search(fr"hsl(a)?\([0-9]+,[0-9]+,[0-9]+(,{float_re})?", color)
                 if hsla:
                     # set alpha to non transparant
                     a = 1
-                    hsl = re.search(f"\([0-9]+,[0-9]+,[0-9]+(,{float_re})?", hsla.group(0)).group(0)[1:]
+                    hsl = re.search(fr"\([0-9]+,[0-9]+,[0-9]+(,{float_re})?", hsla.group(0)).group(0)[1:]
 
                     commas_pos = [cpos for cpos, char in enumerate(hsl) if char == ',']
                     h = int(hsl[0:commas_pos[0]])
@@ -252,9 +256,11 @@ def parse_css_color(color: str) -> [int,int,int,float]:
                     rgbcolor = hsl2rgb(h, s, l)
                     rgbcolor = [int(rgbcolor[0] * 255), int(rgbcolor[1] * 255), int(rgbcolor[2] * 255), a]
 
-    if not rgbcolor:
-        logger.warn(f"Not a valid css color: '{color}', color set to 'white'!")
-        rgbcolor = css_color_keywords['white']["decimal"]
+    if warning and not rgbcolor:
+        logger.warning(f"Not a valid css color: '{color}'!")
+        if fallback:
+            logger.warning(f"fallback: '{color}', color set to 'white'!")
+            rgbcolor = css_color_keywords['white']["decimal"]
 
     return rgbcolor
 
@@ -262,13 +268,13 @@ def rgb24tobw24(rgb24: int) -> int:
     """
         convert a 24 bit rgb (color) value to 24 bit grayscale
     """
-    r = col >> 16;
-    g = (col >> 8) & 0xff;
-    b = col & 0xff;
-    bnw = int(r * 0.299 + g * 0.587 + b * 0.114) & 0xff;
-    return (bnw << 16) | (bnw << 8) | bnw;
+    r = rgb24 >> 16
+    g = (rgb24 >> 8) & 0xff
+    b = rgb24 & 0xff
+    bnw = int(r * 0.299 + g * 0.587 + b * 0.114) & 0xff
+    return (bnw << 16) | (bnw << 8) | bnw
 
-def rgb24tobw8(rgb24: [int,int,int,float]) -> int:
+def rgb24tobw8(rgb24: list[int|float]) -> int:
     """
         convert a 24 bit rgb (color) value to 8 bit grayscale
     """

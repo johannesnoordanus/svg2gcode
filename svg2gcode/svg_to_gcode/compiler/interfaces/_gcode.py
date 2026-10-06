@@ -1,3 +1,6 @@
+"""
+Gcode interface
+"""
 import warnings
 import math
 
@@ -6,10 +9,13 @@ from svg2gcode.svg_to_gcode.compiler.interfaces import Interface
 from svg2gcode.svg_to_gcode.geometry import Vector
 from svg2gcode.svg_to_gcode import TOLERANCES
 
-verbose = False
+VERBOSE = False
 
 
 class Gcode(Interface):
+    """
+    Implements Gcode interface.
+    """
 
     warn_nr = 0
 
@@ -89,7 +95,7 @@ class Gcode(Interface):
 
             self.position = Vector(x, y)
 
-        if verbose:
+        if VERBOSE:
             print(f"Move to {x}, {y}, {z}")
 
         return command
@@ -149,7 +155,7 @@ class Gcode(Interface):
 
             self.position = Vector(x, y)
 
-        if verbose:
+        if VERBOSE:
             print(f"Move to {x}, {y}, {z}")
 
         return command + ''

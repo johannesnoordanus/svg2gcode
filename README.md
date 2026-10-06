@@ -1,6 +1,26 @@
 # svg2gcode
 
-*svg2gcode* is a *WYSIWYG* converter of Scalable Vector Graphic *(SVG)* drawings. It is based on library *SvgToGcode* (*https://github.com/johannesnoordanus/SvgToGcode*)<sup>(*)</sup>.
+*svg2gcode* is a *WYSIWYG* converter of Scalable Vector Graphic *(SVG)* drawings. It is based on library *SvgToGcode* (*https://github.com/johannesnoordanus/SvgToGcode*)<sup>(1)</sup>.
+
+Version 4.0 is out now!
+*svg2gcode 4.0* has a vastly improved *stroke* and *fill* and is even easier to control.
+Lines with a certain width are now drawn almost perfectly in a vector like manner. 
+*fill* is also a vector (line) fill now. 
+Both types of fill *evenodd* and *nonzero* are supported and use a complete new render engine that directly renders to gcode.
+
+It is very easy to convert text to gcode now, just create a *.svg* file using Inkscape for example, type in some text and convert it via object to path to a path.
+Save this file in say *letters.svg* and type the following: <sup>(2)</sup>
+```
+> svg2gcode --color_coded "allothercolors = engrave" letters.svg letters.gc
+```
+This will generate a gcode file *letters.gc* which produces an exact copy of the text on your laser engraver.
+More info on the options and *--color_coded* can be found below.
+
+Fan control has also improved, it is now possible to have the fan on for path drawings or image drawings only.
+
+<sup>(2)</sup> It is also possible to leave out option *--color-coded* because engraving is the default.
+
+ -----
 
 Drawings and images can be composed using Inkscape (or other *SVG* image software), saved to a *.svg* file and - *WYSIWYG* - converted to gcode.
 Color coding can be used to mark what part(s) of the drawing to cut, engrave or even ignore.
@@ -17,14 +37,12 @@ More info can be obtained by looking at the documentation and examples below and
 
 *svg2gcode* has three related programs: *image2gcode* mentioned above has similar capabilities but handles raster image files (like *png* and *jpg*) directly, *gcode2image* performs the inverse function and is capable of showing multiple writes (burns) to the same location and last *grblhud* which gives full control over gcode execution.
 
-<sup>(*)</sup> Note that an upgraded and corrected version of this library is included.
+<sup>(1)</sup> Note that an upgraded and corrected version of this library is included.
 
  -----
 
 If you find this application useful, please consider donating, so I can continue maintaining and enhancing it.<br>
 <http://paypal.me/johannesnoordanus/5,00>
-
-My next update will add *fill-rule* 'nonzero' (see information on *fill-rule* below).
 
  -----
 
@@ -33,7 +51,8 @@ My next update will add *fill-rule* 'nonzero' (see information on *fill-rule* be
 *SVG* *path* and *image* elements (specific: ```<svg:path ..>```tags and images```<svg:image ..>```tags) are supported. Other drawing objects must be converted to a *path* first to be able to translate them to a gcode sequence.
 
 Attributes *stroke* (color), *stroke-width*, *stroke_alpha*, *fill* (color), *fill-rule*, *fill_alpha* are supported.
-Currently only value *evenodd* of *fill-rule* is supported.
+*fill-rule* is currently fully supported and accepts values *evenodd* and *nonzero* of which the latter is default.
+With option ```svg2gcode --fillrule "evenodd|nonzero"``` you can set your our own preference from the commandline. 
 
 ### *WYSIWYG*
 
@@ -57,6 +76,7 @@ style           fill:#000000;stroke-width:0.172652
 To cut this outline, you can set the *fill* attribute to *none* (via the ```XML editor``` or menu ```Fill and Stroke```) and set a specific *stroke* color, for example *red*. The following command generates gcode to cut the outline.
 ```
 > svg2gcode --color_coded "red = cut" contour.svg contour.gc
+
 ```
 You can also engrave the whole bitmap image by setting a specific fill color (via menu ```Fill and Stroke```) (in this case there is no need to use option ```color_coded```)
 
@@ -160,12 +180,11 @@ Some linux distributions use a managed environment in which you cannot install p
 ### Usage:
 ```
 > svg2gcode --help
-usage: runsvg2gcode [-h] [--showimage] [--selfcenter] [--pixelsize <default:0.1>] [--imagespeed <default:800>] [--cuttingspeed <default:1000>] [--imagepower <default:300>]
-                    [--poweroffset <default:0>] [--cuttingpower <default:850>] [--passes <default:1>] [--pass_depth <default:0>] [--rapidmove <default:10>]
-                    [--noise <default:0>] [--overscan <default:0>] [--showoverscan] [--constantburn | --no-constantburn] [--origin delta-x delta-y] [--scale factor-x factor-y]
-                    [--rotate <default:0>] [--splitfile] [--pathcut] [--nofill] [--xmaxtravel <default:300>] [--ymaxtravel <default:400>] [--color_coded <default:"">] [--fan]
-                    [-V]
-                    svg gcode
+usage: svg2gcode     [-h] [--showimage] [--selfcenter] [--pixelsize <default:0.1>] [--imagespeed <default:800>] [--cuttingspeed <default:1000>] [--imagepower <default:300>] [--poweroffset <default:0>]
+                     [--cuttingpower <default:850>] [--passes <default:1>] [--pass_depth <default:0>] [--rapidmove <default:10>] [--noise <default:0>] [--overscan <default:0>] [--showoverscan]
+                     [--constantburn | --no-constantburn] [--origin delta-x delta-y] [--scale factor-x factor-y] [--rotate <default:0>] [--splitfile] [--pathcut] [--nofill] [--fillrule <default:"nonzero">]
+                     [--xmaxtravel <default:300>] [--ymaxtravel <default:400>] [--color_coded <default:"">] [--fan <default:"off">] [-V]
+                     svg gcode
 
 Convert svg to gcode for GRBL v1.1 compatible diode laser engravers.
 
@@ -208,13 +227,17 @@ options:
   --splitfile           split gcode output of SVG path and image objects
   --pathcut             alway cut SVG path objects! (use laser power set with option --cuttingpower)
   --nofill              ignore SVG fill attribute
+  --fillrule <default:"nonzero">
+                        set fill rule to [nonzero|evenodd]
   --xmaxtravel <default:300>
                         machine x-axis lengh in mm
   --ymaxtravel <default:400>
                         machine y-axis lengh in mm
   --color_coded <default:"">
-                        set action for path with specific stroke color "[color = [cut|engrave|ignore] *]*", example: --color_coded "black = ignore purple = cut blue = engrave"
-  --fan                 set machine fan on
+                        set action for path with specific stroke color "[[color|allothercolors] = [cut|engrave|ignore] *]*", example: --color_coded "black = ignore purple = cut blue = engrave allothercolors
+                        = ignore"
+  --fan <default:"off">
+                        set fan [on|off|on_path|on_image]
   -V, --version         show version number and exit
 ```
 

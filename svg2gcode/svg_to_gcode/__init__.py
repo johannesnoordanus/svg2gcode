@@ -1,9 +1,14 @@
+"""
+settings, defaults and checks
+"""
 from typing import Any
 
 TOLERANCES 	= {"approximation": 10 ** -2, "input": 10 ** -3, "operation": 10**-6}
 UNITS      	= {"mm", "inch"}
 LASERMODE	= {"constant", "dynamic"}
 DISTANCEMODE 	= {"absolute", "incremental"}
+FILLRULE        = {"nonzero", "evenodd"}
+FAN             = {"off", "on", "on_path", "on_image"}
 SETTING 	= {
     # Machine parameters
     "laser_mode_enable", 	# boolean 		sets grlb 1.1 laser mode (set default on most laser cutters)
@@ -13,7 +18,7 @@ SETTING 	= {
     "y_axis_maximum_rate",	# positive integer	maximum Y-axis speed (typically mm/sec or mm/min) (NOTE: currently unused)
     "x_axis_maximum_travel",	# positive integer	X-axis length of machine work area (mm)
     "y_axis_maximum_travel",	# positive integer	Y-axis length of machine work area (mm)
-    "fan",			# boolean		when true 'set_laser_power' enables the fan and 'laser_off' disables the fan.
+    "fan",			# FAN		        'on' sets fan on for path and image gcode, 'on_path' sets fan on for 'path' only, 'on_image' for image only.
     # Toolparameters
     "pass_depth",		# positive integer	sets tool cutting depth in machine units (Z-axis: the depth your laser cuts in a pass; note that
 				# 			this depends on laser power and material!)
@@ -41,7 +46,8 @@ SETTING 	= {
     "splitfile",                # boolean               return SVG path objects to <filename>.<gcext> and SVG image objects to <filename>_images.<gcext>
     "pathcut",                  # boolean               always cut SVG path objects! use laser_power setting
     "nofill",                   # boolean               ignore SVG fill attribute
-    "color_coded"               # string                color of path determines whether it is a cut or engrave
+    "color_coded",              # string                color of path determines whether it is a cut or engrave
+    "fillrule"                  # FILLRULE              fill rule
 }
 
 # Set defaults 'minimum_laser_power', 'pass_depth', 'dwell_time', 'laser_power', 'laser_mode', 'unit', 'distance_mode'
@@ -54,7 +60,7 @@ DEFAULT_SETTING 	= {
     "y_axis_maximum_rate": 	None,		# currently unused
     "x_axis_maximum_travel": 	None,		# set this to the length of the machine x-axis (in mm)
     "y_axis_maximum_travel": 	None,		# set this to the length of the machine y-axis (in mm)
-    "fan":			False,		# default set to false (no fan, not on)
+    "fan":			"off",		# default fan off
     # Toolparameters
     "pass_depth": 		0,		# default set to 0 (no depth)
     "dwell_time": 		0,		# default set to 0 (do not linger)
@@ -76,10 +82,11 @@ DEFAULT_SETTING 	= {
     "splitfile":                False,          # SVG path and image objects are emitted to one file: <filename>.<gcext>
     "pathcut":                  False,          # always cut SVG path objects! use laser_power setting
     "nofill":                   False,          # ignore SVG fill attribute
-    "color_coded":              str             # color of path determines whether it is a cut or engrave
+    "color_coded":              str,            # color of path determines whether it is a cut or engrave
+    "fillrule":                 "nonzero"       # default nonzero fill rule
 }
 
-def check_setting(setting: dict[str,Any] =None) -> bool:
+def check_setting(setting: dict[str,Any] | None = None) -> bool:
 
     """
     Check all settings on type and value range.
@@ -118,9 +125,13 @@ def check_setting(setting: dict[str,Any] =None) -> bool:
             raise ValueError(f"Unknown '{key}' value '{setting[key]}'. Please specify one of the following: {UNITS}")
         if key == "distance_mode" and setting[key] not in DISTANCEMODE:
             raise ValueError(f"Unknown '{key}' value '{setting[key]}'. Please specify one of the following: {DISTANCEMODE}")
-        if key in {"fan","showimage","splitfile","pathcut","nofill","image_showoverscan"} and setting[key] not in {True,False}:
+        if key in {"showimage","splitfile","pathcut","nofill","image_showoverscan"} and setting[key] not in {True,False}:
             raise ValueError(f"Unknown '{key}' value '{setting[key]}'. Please specify one of the following: {{True,False}}")
+        if key == "fan" and setting[key] not in FAN:
+            raise ValueError(f"Unknown '{key}' value '{setting[key]}'. Please specify one of the following: {FAN}")
         if key == "pixel_size" and setting[key] and (not isinstance(setting[key],(float)) or setting[key] <= 0):
             raise TypeError(f"'{key}' is of type '{type(setting[key])}' but should be of type {type(1.0)} and have a value > 0.0")
+        if key == "fillrule" and setting[key] not in FILLRULE:
+            raise ValueError(f"Unknown '{key}' value '{setting[key]}'. Please specify one of the following: {FILLRULE}")
 
     return True

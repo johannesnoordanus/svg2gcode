@@ -1,5 +1,5 @@
 [build-system]
-requires = ["flit_core >=3.2,<4"]
+requires = ["flit_core >=3.12,<4"]
 build-backend = "flit_core.buildapi"
 
 [project]
@@ -12,9 +12,9 @@ dynamic = ["version", "description"]
 
 keywords = ["scalable vector graphics", "svg", "image", "laser cutter", "laser engraving"]
 dependencies = [
-    "numpy >= 1.24.3",
-    "Pillow >= 9.5.0",
-    "image2gcode >= 2.9.8",
+    "numpy >= 2.5.3",
+    "Pillow >= 12.2.0",
+    "image2gcode >= 2.9.17",
 ]
 requires-python = ">=3.11"
 
