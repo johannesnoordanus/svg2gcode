@@ -49,7 +49,7 @@ def line_intersect(p1, c1, p2, c2):
     return (((c1_c - p1_c) * p1 - (c1 - p1) * p1_c) * (c2 - p2) - ((c2_c - p2_c) * p2 - (c2 - p2) * p2_c) * (
             c1 - p1)) / ((c2 - p2) * (c1_c - p1_c) - (c1 - p1) * (c2_c - p2_c))
 
-def line_length(A: (float,float),B: (float,float)):
+def line_length(A: tuple[(float,float)], B: tuple[float,float]):
     """ Pythagoras """
     # |Ax - Bx|^2 + |Ay - By|^2 = C^2
     # distance = √C^2
@@ -91,6 +91,7 @@ def angle_between_vectors(v1, v2):
 
 
 def center_to_endpoint_parameterization(center, radii, rotation, start_angle, sweep_angle):
+    """ center_to_endpoint_parameterization"""
     rotation_matrix = RotationMatrix(rotation)
 
     start = rotation_matrix * Vector(radii.x * math.cos(start_angle), radii.y * math.sin(start_angle)) + center
@@ -105,8 +106,9 @@ def center_to_endpoint_parameterization(center, radii, rotation, start_angle, sw
 
 
 def endpoint_to_center_parameterization(start, end, radii, rotation_rad, large_arc_flag, sweep_flag):
-    # Find and select one of the two possible eclipse centers by undoing the rotation (to simplify the math) and
-    # then re-applying it.
+    """ Find and select one of the two possible eclipse centers by undoing the rotation (to simplify the math) and
+        then re-applying it.
+    """
     rotated_primed_values = (start - end) / 2  # Find the primed_values of the start and the end points.
     primed_values = RotationMatrix(rotation_rad, True) * rotated_primed_values
     px, py = primed_values.x, primed_values.y
