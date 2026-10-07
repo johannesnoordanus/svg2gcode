@@ -1,28 +1,33 @@
 # svg2gcode
 
-*svg2gcode* is a *WYSIWYG* converter of Scalable Vector Graphic *(SVG)* drawings. It is based on library *SvgToGcode* (*https://github.com/johannesnoordanus/SvgToGcode*)<sup>(1)</sup>.
+### svg2gcode <small>is a *WYSIWYG* converter of Scalable Vector Graphic *(SVG)* drawings.</small>
 
-Version 4.0 is out now!
-*svg2gcode 4.0* has a vastly improved *stroke* and *fill* and is even easier to control.
+It is based on library *SvgToGcode* (*https://github.com/johannesnoordanus/SvgToGcode*)<sup>(1)</sup>.
+### Version 4.0 is out now!
+**svg2gcode 4.0** has a vastly improved *stroke* and *fill* and is even easier to control.
 Lines with a certain width are now drawn almost perfectly in a vector like manner. 
 *fill* is also a vector (line) fill now. 
 Both types of fill *evenodd* and *nonzero* are supported and use a complete new render engine that directly renders to gcode.
 
-It is very easy to convert text to gcode now, just create a *.svg* file using Inkscape for example, type in some text and convert it via object to path to a path.
+It is very easy to convert text to gcode now, just create a *.svg* file using Inkscape for example, type in some text and convert it via ```object to path``` to a path.
 Save this file in say *letters.svg* and type the following: <sup>(2)</sup>
 ```
 > svg2gcode --color_coded "allothercolors = engrave" letters.svg letters.gc
 ```
-This will generate a gcode file *letters.gc* which produces an exact copy of the text on your laser engraver.
-More info on the options and *--color_coded* can be found below.
+This will generate a gcode file *letters.gc* which produces an exact copy of the text on your laser engraver.<br>
+Option *--color_coded* is enhanced and accepts apart from color names, '#hex', 'rgb(', 'rgba(', 'hsl(' and 'hsla(' color codes.
 
-Fan control has also improved, it is now possible to have the fan on for path drawings or image drawings only.
+As can be seen above a special 'color' ```allothercolors``` is added, which means what you think it means. So we can now name all colors we do not explicitly mention in the option to be able to *'ignore', 'cut' or 'engrave'* all other colors.<br>
+More info on *--color_coded* and other program options and can be found below.
+
+Fan control has also improved, it is now possible to have the fan on for ```path drawings``` or ```image drawings``` only.
 
 <sup>(2)</sup> It is also possible to leave out option *--color-coded* because engraving is the default.
 
  -----
+### General description
 
-Drawings and images can be composed using Inkscape (or other *SVG* image software), saved to a *.svg* file and - *WYSIWYG* - converted to gcode.
+Drawings and images can be composed using Inkscape (or other *SVG* image software), saved to a *.svg* file and *WYSIWYG* converted to gcode.
 Color coding can be used to mark what part(s) of the drawing to cut, engrave or even ignore.
 
 Raster elements within a *SVG* drawing are converted pixel perfect, vector elements are drawn at the specified resolution.
@@ -56,7 +61,11 @@ With option ```svg2gcode --fillrule "evenodd|nonzero"``` you can set your our ow
 
 ### *WYSIWYG*
 
-As seen above, not all *svg* elements are directly supported, but they are after a *path* conversion within the composer (Inkscape: ```menu Path->Object/Stroke to Path```). Without a *path* conversion *svg2gcode* simply ignores all elements except *path* and *image*. Text (fonts) require another step after *selecting* all text and clicking menu ```Object to Path```. Clicking menu```Object->Ungroup``` <sup>(**)</sup> generates a separate *path* for each letter which contains all relevant attributes. (Otherwise Inkscape uses a group tag ```<g``` to set some attributes for all letters within the text that are not repeated for each individual letter.) 
+As seen above, not all *svg* elements are directly supported, but they are after a *path* conversion within the composer (Inkscape: ```menu Path->Object/Stroke to Path```). Without a *path* conversion *svg2gcode* simply ignores all elements except *path* and *image*. 
+
+Depending on your preference text (fonts) require another step in Inkscape after *selecting* all text and clicking menu ```Object to Path```. Clicking menu```Object->Ungroup``` <sup>(3)</sup> generates a separate *path* for each letter which contains all relevant attributes. (Otherwise Inkscape uses a group tag ```<g``` to set some attributes for all letters within the text that are not repeated for each individual letter.)
+
+If you *Ungroup* each character is rendered separately to gcode and this means that *stroke* and *fill* is done per character. Version 4.0 of *svg2gcode* has no problem rendering - do *stroke* and *fill* - for all text combined but note that it is a different situation.
 
 You can use *gcode2image* to check the conversion result:
 ```
@@ -67,28 +76,37 @@ The image shown should be the same as the one shown by the composer (Inkscape). 
 
 #### Contour & fill
 
-Inkscape translates a contour of a raster image to an outline and fill. So, if you create a contour via (select bitmap first) ```Path->Trace Bitmap...``` slide the ```Treshold``` of the Trace Bitmap menu to almost 1 (0,995) to make the entire bitmap image black (this is a bit *trial and error*, use ```Update preview``` to get the highest slider value before the whole images is black).
+Inkscape translates a contour of a raster image to an outline and fill. So, if you create a contour using Inkscape via (select bitmap first) ```Path->Trace Bitmap...``` slide the ```Treshold``` of the Trace Bitmap menu to almost 1 (0,995) to make the entire bitmap image black (this is a bit *trial and error*, use ```Update preview``` to get the highest slider value before the whole images is black), the style attribute will look like:
 
-You can look at the result xml tree via Inkscapes ```XML editor``` which now shows a path for the outline of the raster image and a style attribue like this:
 ```
 style           fill:#000000;stroke-width:0.172652
 ```
+
+You see this in the ```.svg``` file or the xml tree via Inkscapes ```XML editor``` which now shows a path for the outline of the raster image and a style attribute.
+
 To cut this outline, you can set the *fill* attribute to *none* (via the ```XML editor``` or menu ```Fill and Stroke```) and set a specific *stroke* color, for example *red*. The following command generates gcode to cut the outline.
 ```
 > svg2gcode --color_coded "red = cut" contour.svg contour.gc
 
 ```
-You can also engrave the whole bitmap image by setting a specific fill color (via menu ```Fill and Stroke```) (in this case there is no need to use option ```color_coded```)
+You can also engrave the whole bitmap image by setting a specific fill color (via menu ```Fill and Stroke```); in this case there is no need to use option ```color_coded``` because engraving is the default. But remember that is it possible to ignore (or engrave or cut) all other colors by using the special keyword ```allothercolors```.
+
+For example if you have the following:
+
+```
+svg2gcode --showimage --fillrule evenodd --color_coded "#0F0F0F = engrave, green = cut, allothercolors = ignore" some.svg some.gc
+```
+Lines having color code *#0F0F0F* will be engraved and line having color name 'green' will be cut, while all other colors you might have in your drawing will be ignored.
 
 #### Notes
 
  - drawing objects - within the composer - must be converted to a```path```to be translated to a gcode sequence
  - image objects should **not** be converted to a ```path```
- - images must be linked or embedded using base64 (Inkscape default).
+ - images must be linked or embedded using base64 							 (Inkscape default)
  - images can be in several formats (my tests included *.png* and  *.jpg* image files)
- - *SVG* source documents must be in unit 'mm' and set to ```1 'user unit' is 1 mm``` (Inkscape default)
+ - vector graphics (*.svg*) source documents must be in unit 'mm' and set to ```1 'user unit' is 1 mm``` (Inkscape default)
 
-<sup>(**)</sup> Note that the latest version of *svg2gcode* (3.3.4) has support for ```<g``` tags (attribute inheritance) and is able to correctly convert text without ```Ungroup```.
+<sup>(3)</sup> Note that the latest version of *svg2gcode* (4.0.0) has support for ```<g``` tags (attribute inheritance) and is able to correctly convert text without ```Ungroup```.
 
 ### Important Commandline options
 
@@ -98,7 +116,7 @@ For example:
 > svg2gcode --color_coded "black = ignore red = cut blue = engrave" paws.svg paws.gc
 ```
 As a consequence all 'black' path elements will be ignored and will not appear after conversion, all red paths will be cut and all blue paths will be engraved (having color blue). 
-The corresponding gcode file contains lines like below to indicated which 'black path' is skipped:
+The corresponding gcode (*.gc*) file contains lines like below to indicated which 'black path' is skipped:
 ```
 ;    svg2gcode 3.2.8 (2024-07-28 11:39:27)
 ;    arguments:
@@ -151,7 +169,7 @@ Note that these attributes override explicit or default commandline settings.
 
 ### gcode optimizations
 
-Optimized gcode
+Optimized gcode for images
 - draw pixels in one go until change of power
 - emit X/Y coordinates only when they change
 - emit linear move 'G1/G0' code minimally
@@ -159,7 +177,7 @@ Optimized gcode
 
 General optimizations
 - laser head has deferred and sparse moves.
-(XY locations are virtual, head does not always follow)
+  (XY locations are virtual, head does not always follow)
 - moves at high speed (G0) over 10mm (default) or more zero pixels
 - low burn levels (stray pixels) can be suppressed (default off)
 - default --constantburn mode *gcode M3*
