@@ -1,6 +1,6 @@
 # svg2gcode
 
-### svg2gcode <small>is a *WYSIWYG* converter of Scalable Vector Graphic *(SVG)* drawings.</small>
+### svg2gcode <small>is a *WYSIWYG* converter of Scalable Vector Graphic *(.svg)* drawings.</small>
 
 It is based on library *SvgToGcode* (*https://github.com/johannesnoordanus/SvgToGcode*)<sup>(1)</sup>.
 ### Version 4.0 is out now!
