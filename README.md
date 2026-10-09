@@ -63,7 +63,7 @@ If you find this application useful, please consider donating, so I can continue
 
 Attributes *stroke* (color), *stroke-width*, *stroke_alpha*, *fill* (color), *fill-rule*, *fill_alpha* are supported.
 *fill-rule* is currently fully supported and accepts values *evenodd* and *nonzero* of which the latter is default.
-With option ```svg2gcode --fillrule "evenodd|nonzero"``` you can set your our own preference from the commandline. 
+With option ```svg2gcode --fillrule "evenodd|nonzero"``` you can set your own preference from the commandline. 
 
 ### *WYSIWYG*
 
