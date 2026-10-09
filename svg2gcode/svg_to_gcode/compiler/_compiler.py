@@ -40,6 +40,12 @@ logging.basicConfig(format="[%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
+# fan codes
+FAN_OFF = 0
+FAN_CUT = 1
+FAN_ENGRAVE = 4
+FAN_ON = 8
+
 class Compiler:
     """
     The Compiler class handles the process of drawing geometric objects using interface commands
@@ -74,12 +80,17 @@ class Compiler:
         for key in params.keys():
             self.settings[key] = params[key]
 
-        self.interface.set_machine_parameters(self.settings)
+        # get fan code:
+        fan_code = FAN_OFF
+        fan_code |= FAN_CUT if self.settings['fan'] == "on_cut" else 0
+        fan_code |= FAN_ENGRAVE if self.settings['fan'] == "on_engrave" else 0
+        fan_code |= FAN_ON if self.settings['fan'] == "on" else 0
 
-        # fan toggles
-        self.fan_on = self.settings['fan'] == "on"
-        self.fan_path = self.settings['fan'] == "on_path"
-        self.fan_image = self.settings['fan'] == "on_image"
+        # update in settings
+        self.settings['fan'] = fan_code
+
+        # set machine parameters in interface
+        self.interface.set_machine_parameters(self.settings)
 
         if custom_header is None:
             custom_header = []
@@ -153,7 +164,6 @@ class Compiler:
             logger.debug("Compile with an empty body (no curves).")
             return ''
 
-        fan_off = False
         gcode = []
         for i in range(passes):
             gcode += [f"; pass #{i+1}"]
@@ -161,7 +171,7 @@ class Compiler:
 
             if i < (passes - 1) and self.settings["pass_depth"] > 0:
                 # If it isn't the last pass, turn off the laser and move down
-                gcode.append(self.interface.laser_off(fan_off))
+                gcode.append(self.interface.laser_off(fan_off = False))
                 gcode.append(self.interface.set_relative_coordinates())
                 gcode.append(self.interface.linear_move(z=-self.settings["pass_depth"]))
                 gcode.append(self.interface.set_distance_mode(self.settings["distance_mode"]))
@@ -179,7 +189,7 @@ class Compiler:
 
         # laser off, fan on or off, M3 or M4 burn mode
         header_gc = ["M5"]
-        if (self.fan_on or self.fan_image):
+        if (self.settings["fan"] == FAN_ON or self.settings["fan"] == FAN_ENGRAVE):
             # fan on
             header_gc += ['M8']
         else:
@@ -213,26 +223,26 @@ class Compiler:
             with open(file_name, 'w') as file:
                 program_end = footer if (self.settings["splitfile"] or len(self.gcode) == 0) else ""
                 file.write(self.gcode_file_header() + header + self.compile(passes=passes) + '\n' + program_end)
-                logger.info(f"Generated {file_name}")
+                logger.info(f"Path drawings written to '{file_name}'")
         else:
-            logger.warning(f'No path (curve) data found nothing added to "{file_name}"')
+            logger.warning(f"No paths to draw, nothing to write to '{file_name}', skipping")
 
         image_file_name = file_name.rsplit('.',1)[0] + "_images." + file_name.rsplit('.',1)[1]
         if len(self.gcode) == 0:
             if self.settings["splitfile"]:
-                logger.warning(f"No image found, skipping '{image_file_name}'")
+                logger.warning(f"No images to draw, nothing to write to '{image_file_name}', skipping")
         else:
             if self.settings["splitfile"]:
                 # emit image objects to <filename>_images.<gcext>
                 with open(image_file_name, 'w') as file:
                     file.write(self.gcode_file_header() + header + self.compile_images() + '\n' + footer)
-                    logger.info(f"Generated {image_file_name}")
+                    logger.info(f"Image drawings written to '{image_file_name}'")
             else:
                 # emit images objects in same file
                 open_mode = 'w' if len(self.body) == 0 else 'a+'
                 with open(file_name, open_mode) as file:
                     file.write((self.gcode_file_header() if len(self.body) == 0 else "") + '\n' +  self.compile_images() + '\n' + footer)
-                    logger.info(f"Added image(s) to {file_name}")
+                    logger.info(f"Added image drawings to '{file_name}'")
 
     def append_line_chain(self, line_chain: LineSegmentChain, step: float, color: int | None = None, speed: int | None = None):
         """
@@ -256,28 +266,37 @@ class Compiler:
         laser_power = color if color is not None else self.settings["laser_power"]
         movement_speed = speed if speed is not None else self.settings["movement_speed"]
 
-        # do not turn fan off
-        fan_off = False
+        # set fan on or off for this engrave or cut
+        if color is None and speed is None:
+            # this is a cut
+            fan_set = self.settings["fan"] == FAN_ON or self.settings["fan"] == FAN_CUT
+        else:
+            # this is an engrave
+            fan_set = self.settings["fan"] == FAN_ON or self.settings["fan"] == FAN_ENGRAVE
 
 	# Move to the next line_chain when the next line segment doesn't connect to the end of the previous one.
         if self.interface.position is None or abs(self.interface.position - start) > TOLERANCES["operation"]:
             if self.interface.position is None or self.settings["rapid_move"]:
                 # move to the next line_chain: set laser off, rapid move to start of chain,
                 # set movement (cutting) speed, set laser mode and power on
-                code += [self.interface.laser_off(fan_off), self.interface.rapid_move(start.x, start.y),
+                code += [self.interface.laser_off(fan_off = False), self.interface.rapid_move(start.x, start.y),
                         self.interface.set_movement_speed(movement_speed),
-                        self.interface.set_laser_mode(self.settings["laser_mode"]), self.interface.set_laser_power_value(laser_power,self.fan_on or self.fan_path)]
+                        self.interface.set_laser_mode(self.settings["laser_mode"]), self.interface.set_laser_power_value(laser_power,fan_on = fan_set)]
             else:
                 # move to the next line_chain: set laser mode, set laser power to 0 (cutting is off),
                 # set movement speed, (no rapid) move to start of chain, set laser to power
-                code += [self.interface.set_laser_mode(self.settings["laser_mode"]), self.interface.set_laser_power_value(0,self.fan_on or self.fan_path),
+                code += [self.interface.set_laser_mode(self.settings["laser_mode"]), self.interface.set_laser_power_value(0,fan_off = False),
                         self.interface.set_movement_speed(movement_speed), self.interface.linear_move(start.x, start.y),
-                        self.interface.set_laser_power_value(laser_power)]
+                        self.interface.set_laser_power_value(laser_power, fan_on = fan_set)]
 
             self.boundingbox.update(start)
 
             if self.settings["dwell_time"] > 0:
                 code += [self.interface.dwell(self.settings["dwell_time"])] + code
+
+        else:
+            # set laser power and fan
+            code += [self.interface.set_laser_power_value(laser_power, fan_on = fan_set)]
 
         for line in line_chain:
             code.append(self.interface.linear_move(line.end.x, line.end.y))
@@ -732,9 +751,11 @@ class Compiler:
         def straighten_line_chain(line_chain: LineSegmentChain) -> LineSegmentChain:
             """
             Make lines that connect and have the same inclination, one line.
+            :return: LineSegmentChain, can be empty chain_size == 0 when all moves are 'non moves'
             """
             straight_chain = LineSegmentChain()
             prev_line = None
+
             for line in line_chain:
                 # skip non move lines
                 if line.start != line.end:
@@ -781,7 +802,7 @@ class Compiler:
 
             for line_chain in path_curves:
 
-                # catternate all segmented lines
+                # catternate all segmented lines and skip 'non move' lines
                 line_chain = straighten_line_chain(line_chain)
 
                 # Calculate all intersections of lines with this horizontal line y
@@ -887,8 +908,8 @@ class Compiler:
                     # set inversed b&w value (and apply alpha channel, when available)
                     inverse_bw = round(Image2gcode.linear_power(css_color.parse_css_color2bw8(fill_color),
                                                           self.settings["maximum_image_laser_power"]) * fill_alpha)
-
-                    code += [self.interface.set_laser_power_value(inverse_bw)]
+                    # set laser power and fan when 'on' or 'engrave'
+                    code += [self.interface.set_laser_power_value(inverse_bw, fan_on = (self.settings["fan"] == FAN_ON or self.settings["fan"] == FAN_ENGRAVE))]
 
                     # fill from left to right and reverse
                     lefttoright = True
@@ -922,6 +943,8 @@ class Compiler:
                         # switch fill direction
                         lefttoright = not lefttoright
 
+                    # turn laser and fan off
+                    code += [self.interface.laser_off(fan_off = (self.settings["fan"] == FAN_ON or self.settings["fan"] == FAN_ENGRAVE))]
                     code += [f"\n; end {fill_rule} fill '{name_id}'\n"]
                     # append gcode
                     self.body.extend(code)
@@ -939,7 +962,12 @@ class Compiler:
                  fill_rule,
                  style_pathcut) = get_style_info_of_line_chain(line_chain)
 
+                # catternate lines and remove all 'non move' lines.
                 line_chain = straighten_line_chain(line_chain)
+
+                if line_chain.chain_size() == 0:
+                    # no lines need no drawing
+                    continue
 
                 if (style_pathcut is not None and style_pathcut == 'true') or self.settings["pathcut"]:
                     # cut path
@@ -972,6 +1000,8 @@ class Compiler:
                                 # color_coded set cut path for this stroke_color
                                 self.body.extend([f"\n; --color_coded cut path '{name_id}' (with stroke color '{stroke_color}')"])
                                 render_pathwidth(line_chain, [0], None, None, boundingbox)
+                                self.body.extend([self.interface.laser_off(fan_off = (self.settings["fan"] == FAN_ON or self.settings["fan"] == FAN_CUT))])
+                                self.body.extend([f"\n; end --color_coded: cut path '{name_id}'\n"])
                             elif inverse_bw:
                                 if engravepath:
 
@@ -980,6 +1010,9 @@ class Compiler:
 
                                     self.body.extend([f"\n; --color_coded: engrave path '{name_id}' with stroke color '{stroke_color}'"])
                                     render_pathwidth(line_chain, steps, inverse_bw, speed, boundingbox)
+                                    # turn laser and fan off
+                                    self.body.extend([self.interface.laser_off(fan_off = (self.settings["fan"] == FAN_ON or self.settings["fan"] == FAN_ENGRAVE))])
+                                    self.body.extend([f"\n; end --color_coded: engrave path '{name_id}'\n"])
                                 else:
                                     self.body.extend([f"\n; --color_coded: engrave not set for stroke color '{stroke_color}' of  path '{name_id}'"])
                         else:
@@ -991,8 +1024,11 @@ class Compiler:
                         steps = get_steps(stroke_width, pixel_size)
 
                         # color_coded isn't set: engrave path with stroke color
-                        self.body.extend([f"\n; engrave path '{name_id}' with stroke color '{stroke_color}'"])
+                        self.body.extend([f"\n; engrave path (default) '{name_id}' with stroke color '{stroke_color}'"])
                         render_pathwidth(line_chain, steps, inverse_bw, speed, boundingbox)
+                        # turn laser and fan off
+                        self.body.extend([self.interface.laser_off(fan_off = (self.settings["fan"] == FAN_ON or self.settings["fan"] == FAN_ENGRAVE))])
+                        self.body.extend([f"\n; end engrave path '{name_id}'\n"])
                 else:
                     # cannot engrave path (ignore)
                     self.body.extend([f"\n; cannot engrave path '{name_id}': no stroke color set"])

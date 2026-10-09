@@ -164,7 +164,7 @@ def main() -> int:
          type = str, help = 'set action for path with specific stroke color "[[color|allothercolors] = [cut|engrave|ignore] *]*"'
                             ', example: --color_coded "black = ignore purple = cut blue = engrave allothercolors = ignore"' )
     parser.add_argument('--fan', action = 'store', default=cfg["fan_default"], metavar="<default:\"" + str(cfg["fan_default"])+ "\">",
-         type = str, help = 'set fan [on|off|on_path|on_image]')
+         type = str, help = 'set fan [on|on_engrave|on_cut]')
     parser.add_argument('-V', '--version', action='version', version='%(prog)s ' + __version__, help="show version number and exit")
 
     args = parser.parse_args()

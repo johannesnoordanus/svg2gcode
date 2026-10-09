@@ -8,7 +8,7 @@ UNITS      	= {"mm", "inch"}
 LASERMODE	= {"constant", "dynamic"}
 DISTANCEMODE 	= {"absolute", "incremental"}
 FILLRULE        = {"nonzero", "evenodd"}
-FAN             = {"off", "on", "on_path", "on_image"}
+FAN             = {"on", "off", "on_engrave", "on_cut"}
 SETTING 	= {
     # Machine parameters
     "laser_mode_enable", 	# boolean 		sets grlb 1.1 laser mode (set default on most laser cutters)

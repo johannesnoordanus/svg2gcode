@@ -20,7 +20,7 @@ Option *--color_coded* is enhanced and accepts apart from color names, '#hex', '
 As can be seen above a special 'color' ```allothercolors``` is added, which means what you think it means. So we can now name all colors we do not explicitly mention in the option to be able to *'ignore', 'cut' or 'engrave'* all other colors.<br>
 More info on *--color_coded* and other program options and can be found below.
 
-Fan control has also improved, it is now possible to have the fan on for ```path drawings``` or ```image drawings``` only.
+Fan control has also improved, it is now possible - apart from setting it on or off globally - to have fan on for ```engraving``` or ```cut``` only.
 
 <sup>(2)</sup> It is also possible to leave out option *--color-coded* because engraving is the default.
 
@@ -255,7 +255,7 @@ options:
                         set action for path with specific stroke color "[[color|allothercolors] = [cut|engrave|ignore] *]*", example: --color_coded "black = ignore purple = cut blue = engrave allothercolors
                         = ignore"
   --fan <default:"off">
-                        set fan [on|off|on_path|on_image]
+                        set fan [on|off|on_engrave|on_cut]
   -V, --version         show version number and exit
 ```
 
