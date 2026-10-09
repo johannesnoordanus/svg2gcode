@@ -22,7 +22,7 @@ More info on *--color_coded* and other program options and can be found below.
 
 Fan control has also improved, it is now possible - apart from setting it on or off globally - to have fan on for ```engraving``` or ```cut``` only.
 
-I put a lot of work into this program to get it right, but it might be that you encounter errors in which case you can contact me or put in an issue at ```https://github.com/johannesnoordanus/svg2gcode```. You can also request a feature request in the same manner.
+I put a lot of work into this program to get it right, but it might be that you encounter errors in which case you can contact me or put in an issue at ```https://github.com/johannesnoordanus/svg2gcode```. You can also do a feature request in the same manner.
 
 Have fun using it.
 
