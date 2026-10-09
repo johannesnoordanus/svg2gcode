@@ -15,7 +15,7 @@ Save this file in say *letters.svg* and type the following: <sup>(2)</sup>
 > svg2gcode --color_coded "allothercolors = engrave" letters.svg letters.gc
 ```
 This will generate a gcode file *letters.gc* which produces an exact copy of the text on your laser engraver.<br>
-Option *--color_coded* is enhanced and accepts apart from *color* names, ```#hex```, ```rgb```, ```rgba```, ```hsl``` and ```hsla```* color codes.
+Option *--color_coded* is enhanced and accepts apart from *color* names, ```#hex```, ```rgb```, ```rgba```, ```hsl``` and ```hsla``` color codes.
 
 As can be seen above a special 'color' ```allothercolors``` is added, which means what you think it means. So we can now name all colors we do not explicitly mention in the option to be able to *'ignore', 'cut' or 'engrave'* all other colors.<br>
 More info on *--color_coded* and other program options and can be found below.
