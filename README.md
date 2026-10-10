@@ -4,7 +4,7 @@
 
 Vector graphics files can be manipulated - scaled, rotated, transformed - and be converted to optimised gcode which can be directly used on your laser engraver/cutter. Properties like line thickness, fill and color are all taken into account. They are vector based. Unique is that bitmap images are also supported and drawn alongside and at the same scaling and position as defined in the *.svg* file. Specific lines within the vector drawings can be identified by color name or code and assigned actions like engrave, cut or ignore. All from one command.
 
-*svg2gcode* makes use of library *image2gcode* for bitmap conversion to gcode and an updated and correct version of library *SvgToGcode* for parsing (reading, interpreting) vector graphics files.<sup>(1)</sup>.
+*svg2gcode* makes use of library *image2gcode* for bitmap conversion to gcode and an updated and corrected version of library *SvgToGcode* for parsing (reading, interpreting) vector graphics files.<sup>(1)</sup>.
 
 ### Version 4.0 is out now!
 **svg2gcode 4.0** has a vastly improved *stroke* and *fill* and is even easier to control.
