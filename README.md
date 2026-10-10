@@ -51,7 +51,7 @@ More info can be obtained by looking at the documentation and examples below and
 
 *svg2gcode* has three related programs: *image2gcode* mentioned above has similar capabilities but handles raster image files (like *png* and *jpg*) directly, *gcode2image* performs the inverse function and is capable of showing multiple writes (burns) to the same location and last *grblhud* which gives full control over gcode execution.
 
-<sup>(1)</sup> *image2gcode* can be found here: *https://github.com/johannesnoordanus/image2gcode*, the updated library *SvgToGcode* can be found here: *https://github.com/johannesnoordanus/SvgToGcode*. Note that the libraries are included in the program *svg2gcode*.
+<sup>(1)</sup> *image2gcode* can be found here: *https://github.com/johannesnoordanus/image2gcode*, the updated library *SvgToGcode* can be found here: *https://github.com/johannesnoordanus/SvgToGcode*. Note that python library and program *image2gcode* will be installed alongside when installing via *pip* and that *SvgToGcode* is included in *svg2gcode*.
 
  -----
 
