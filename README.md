@@ -1,8 +1,11 @@
 # svg2gcode
 
-### svg2gcode <small>is a *WYSIWYG* converter of Scalable Vector Graphic *(.svg)* drawings.</small>
+### svg2gcode <small>converts Scalable Vector Graphic drawings - *WYSIWYG* - to GCODE.</small>
 
-It is based on library *SvgToGcode* (*https://github.com/johannesnoordanus/SvgToGcode*)<sup>(1)</sup>.
+Vector graphics files can be manipulated - scaled, rotated, transformed - and be converted to optimised gcode which can be directly used on your laser engraver/cutter. Things like line thickness, fill and color are all taken into account. They are vector based. Unique is that bitmap images are also supported and drawn alongside and at the same scaling and position as defined in the *.svg* file.
+
+*svg2gcode* makes use of library *image2gcode* for bitmap conversion to gcode and an updated and correct version of library *SvgToGcode* for parsing (reading, interpreting) vector graphics files.<sup>(1)</sup>.
+
 ### Version 4.0 is out now!
 **svg2gcode 4.0** has a vastly improved *stroke* and *fill* and is even easier to control.
 Lines with a certain width are now drawn almost perfectly in a vector like manner. 
@@ -48,7 +51,7 @@ More info can be obtained by looking at the documentation and examples below and
 
 *svg2gcode* has three related programs: *image2gcode* mentioned above has similar capabilities but handles raster image files (like *png* and *jpg*) directly, *gcode2image* performs the inverse function and is capable of showing multiple writes (burns) to the same location and last *grblhud* which gives full control over gcode execution.
 
-<sup>(1)</sup> Note that an upgraded and corrected version of this library is included.
+<sup>(1)</sup> *image2gcode* can be found here: *https://github.com/johannesnoordanus/image2gcode*, the updated library *SvgToGcode* can be found here: *https://github.com/johannesnoordanus/SvgToGcode*. Note that the libraries are included in the program *svg2gcode*.
 
  -----
 
