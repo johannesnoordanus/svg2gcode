@@ -122,7 +122,7 @@ class Compiler:
                 gcode += ["; WARNING: Cut is not within machine bounds of "
                           f"X[0,{self.settings['x_axis_maximum_travel']}], Y[0,{self.settings['y_axis_maximum_travel']}]\n",]
             elif not self.check_axis_maximum_travel():
-                # logger.warning("Please define machine cutting area, set parameter: 'x_axis_maximum_travel' and 'y_axis_maximum_travel'")
+                logger.warning("Please define machine cutting area, set parameter: 'x_axis_maximum_travel' and 'y_axis_maximum_travel'")
                 gcode += ["; WARNING: Please define machine cutting area, set parameter: 'x_axis_maximum_travel' and 'y_axis_maximum_travel'\n",]
             else:
                 gcode += [f"; WARNING: distance mode is not absolute: {self.settings['distance_mode']}\n",]
@@ -473,14 +473,14 @@ class Compiler:
 
                 # parse fill
                 if style['fill'] is None and 'fill' in style_str:
-                    fill = re.search('fill:[^;]+;',style_str)
+                    fill = re.search('fill:[^;]+(?:;|$)',style_str)
                     if fill:
                         fill_str = fill.group(0)[5:-1]
                         if fill_str != 'none':
                             style['fill'] = fill_str
                 # parse fill-rule
                 if style['fill-rule'] is None and 'fill-rule' in style_str:
-                    fill_rule = re.search('fill-rule:#(evenodd|nonzero)',style_str)
+                    fill_rule = re.search('fill-rule: ?(evenodd|nonzero)',style_str)
                     if fill_rule:
                         style['fill-rule'] = re.search('(evenodd|nonzero)', fill_rule.group(0)).group(0)
                 # parse fill-opacity
@@ -490,7 +490,7 @@ class Compiler:
                         style['fill-opacity'] = re.search(r'(\d*\.)?\d+', fill_opacity.group(0)).group(0)
                 # parse stroke
                 if style['stroke'] is None and 'stroke' in style_str:
-                    stroke = re.search('stroke:[^;]+;',style_str)
+                    stroke = re.search('stroke:[^;]+(?:;|$)',style_str)
                     if stroke:
                         stroke_str = stroke.group(0)[7:-1]
                         if stroke_str != 'none':
@@ -730,21 +730,26 @@ class Compiler:
                         # fill opacity attribute overrides rgba property
                         stroke_alpha = float(style['stroke-opacity'])
                         if not 0 <= stroke_alpha <= 1:
-                            logger.warning(f"Opacity value '{stroke_alpha}' should be in range [0.0..1.0]!")
+                            logger.warning(f"Attribute 'opacity' with value '{stroke_alpha}' should be in range [0.0..1.0]!")
                             stroke_alpha = 1
                 if style['stroke-width'] is not None and style['stroke-width'] != 'none':
                     width = float(style['stroke-width'])
                     stroke_width = math.ceil(round(width/pixel_size, self.precision)/2)
+                    if not style['stroke']:
+                        logger.warning(f"Attribute 'stroke width' is set to '{style['stroke-width']}', but no stroke color given: skip this path.")
+
                 if style['fill'] is not None and style['fill'] != 'none':
                     fill_color = style['fill']
-                    if style['fill-rule'] is not None:
-                        fill_rule = style['fill-rule']
-                    if style['fill-opacity'] is not None:
+                    if style['fill-opacity'] is not None :
                         # fill opacity attribute overrides rgba property
                         fill_alpha = float(style['fill-opacity'])
                         if not 0 <= fill_alpha <= 1:
-                            logger.warning(f"Opacity value '{fill_alpha}' should be in range [0.0..1.0]!")
+                            logger.warning(f"Attribute 'fill opacity' with value '{fill_alpha}' should be in range [0.0..1.0]!")
                             fill_alpha = 1
+                if style['fill-rule'] is not None and style['fill-rule'] != 'none':
+                    fill_rule = style['fill-rule']
+                    if not style['fill']:
+                        logger.warning(f"Attribute 'fillrule' is set to '{fill_rule}', but no fill color given: skip this fill.")
 
             return (stroke_width, stroke_color, stroke_alpha, fill_color, fill_alpha, fill_rule, style['pathcut'])
 
@@ -1031,4 +1036,5 @@ class Compiler:
                         self.body.extend([f"\n; end engrave path '{name_id}'\n"])
                 else:
                     # cannot engrave path (ignore)
+                    logger.warning(f"cannot engrave path '{name_id}': no stroke color set")
                     self.body.extend([f"\n; cannot engrave path '{name_id}': no stroke color set"])
