@@ -35,9 +35,25 @@ from svg2gcode import __version__
 from image2gcode.boundingbox import Boundingbox # type: ignore[import-untyped]
 from image2gcode.image2gcode import Image2gcode # type: ignore[import-untyped]
 
-#logging.basicConfig(format="[%(levelname)s] %(message)s (%(name)s:%(lineno)s)")
-logging.basicConfig(format="[%(levelname)s] %(message)s")
+class OnceFilter(logging.Filter):
+    """log same messages only once"""
+    def __init__(self):
+        super().__init__()
+        self.logged_messages = set()
+
+    def filter(self, record):
+        # Use message string is key
+        log_entry = record.getMessage()
+        if log_entry in self.logged_messages:
+            # duplicate if message in set()
+            return False  # Do not log
+        self.logged_messages.add(log_entry)
+        return True  # Log it
+
+# Setup logger, add filter to display  messages only once.
 logger = logging.getLogger(__name__)
+logger.addFilter(OnceFilter())
+logging.basicConfig(format="[%(levelname)s] %(message)s")
 logger.setLevel(logging.INFO)
 
 # fan codes
