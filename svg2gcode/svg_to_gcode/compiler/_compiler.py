@@ -5,6 +5,7 @@
     - paths are drawn in a vector graphics way including 'fill' and 'stroke'.
 """
 
+import sys
 import os
 import re
 import logging
@@ -18,6 +19,7 @@ import base64
 from datetime import datetime
 from operator import itemgetter
 from PIL import Image
+from pathlib import Path
 import numpy as np
 import numpy.typing as npt
 
@@ -109,10 +111,10 @@ class Compiler:
         self.interface.set_machine_parameters(self.settings)
 
         if custom_header is None:
-            custom_header = []
+            custom_header = [self.interface.set_fan_state('M9', force = True)]
 
         if custom_footer is None:
-            custom_footer = [self.interface.laser_off(), self.interface.program_end()]
+            custom_footer = [self.interface.laser_off(), self.interface.set_fan_state('M9', force = True), self.interface.program_end()]
 
         self.header = [self.interface.code_initialize(),
                        self.interface.set_unit(self.settings["unit"]),
@@ -205,12 +207,8 @@ class Compiler:
 
         # laser off, fan on or off, M3 or M4 burn mode
         header_gc = ["M5"]
-        if (self.settings["fan"] == FAN_ON or self.settings["fan"] == FAN_ENGRAVE):
-            # fan on
-            header_gc += ['M8']
-        else:
-            # make sure fan is off
-            header_gc += ['M9']
+        fan_state = 'M8' if self.settings["fan"] == FAN_ON or self.settings["fan"] == FAN_ENGRAVE else 'M9'
+        header_gc += [self.interface.set_fan_state(fan_state, force = self.settings["splitfile"])]
 
         header_gc += ['M3' if self.settings["laser_mode"] == "constant" else 'M4']
 
@@ -228,8 +226,35 @@ class Compiler:
         """
         self.svg_file_name = svg_file_name
 
+        def ext_check(expected_extension, filename):
+
+            suffixes = expected_extension.split(',')
+
+            for suffix in suffixes:
+                if filename.lower().endswith(suffix):
+                    return True
+
+            return False
+
+        # check file extentions
+        suffixes = '.svg,.vect'
+        if not ext_check(suffixes, svg_file_name):
+            logger.error(f"Error: unknown input file extension '{Path(svg_file_name).suffix}', vector file extension should be one of '{suffixes}', exit ...")
+            sys.exit(1)
+        suffixes = '.gc,.gcode'
+        if not ext_check(suffixes, file_name):
+            logger.error(f"Error: unknown output file extension '{Path(file_name).suffix}', gcode file extension should be one of '{suffixes}', exit ...")
+            sys.exit(1)
+
 	# generate gcode for 'path' and 'image' svg tags (calculate bbox)
+        # results accumulate in:
+        # - self.body (path gcode)
+        # - self.gcode (image gcode)
         self.append_curves(curves)
+
+        # check svg file content
+        if len(self.body) == 0 and len(self.gcode) == 0:
+            logger.error(f"No paths and images to draw, input file '{svg_file_name}' is no vector file?")
 
         header = '\n'.join(self.header) + '\n'
         footer = '\n'.join(self.footer) + '\n'
@@ -301,7 +326,7 @@ class Compiler:
             else:
                 # move to the next line_chain: set laser mode, set laser power to 0 (cutting is off),
                 # set movement speed, (no rapid) move to start of chain, set laser to power
-                code += [self.interface.set_laser_mode(self.settings["laser_mode"]), self.interface.set_laser_power_value(0,fan_off = False),
+                code += [self.interface.set_laser_mode(self.settings["laser_mode"]), self.interface.set_laser_power_value(0,fan_on = False),
                         self.interface.set_movement_speed(movement_speed), self.interface.linear_move(start.x, start.y),
                         self.interface.set_laser_power_value(laser_power, fan_on = fan_set)]
 
@@ -313,6 +338,10 @@ class Compiler:
         else:
             # set laser power and fan
             code += [self.interface.set_laser_power_value(laser_power, fan_on = fan_set)]
+
+        if not fan_set:
+            #set fan off
+            code += [self.interface.set_fan_state('M9')]
 
         for line in line_chain:
             code.append(self.interface.linear_move(line.end.x, line.end.y))
@@ -929,8 +958,15 @@ class Compiler:
                     # set inversed b&w value (and apply alpha channel, when available)
                     inverse_bw = round(Image2gcode.linear_power(css_color.parse_css_color2bw8(fill_color),
                                                           self.settings["maximum_image_laser_power"]) * fill_alpha)
+
+                    fan_set = self.settings["fan"] == FAN_ON or self.settings["fan"] == FAN_ENGRAVE
                     # set laser power and fan when 'on' or 'engrave'
-                    code += [self.interface.set_laser_power_value(inverse_bw, fan_on = (self.settings["fan"] == FAN_ON or self.settings["fan"] == FAN_ENGRAVE))]
+                    code += [self.interface.set_laser_power_value(inverse_bw, fan_on = fan_set)]
+
+                    # but set it off when needed
+                    if not fan_set:
+                        #set fan off
+                        code += [self.interface.set_fan_state('M9')]
 
                     # fill from left to right and reverse
                     lefttoright = True
@@ -965,92 +1001,110 @@ class Compiler:
                         lefttoright = not lefttoright
 
                     # turn laser and fan off
-                    code += [self.interface.laser_off(fan_off = (self.settings["fan"] == FAN_ON or self.settings["fan"] == FAN_ENGRAVE))]
+                    #code += [self.interface.laser_off(fan_off = (self.settings["fan"] == FAN_ON or self.settings["fan"] == FAN_ENGRAVE))]
                     code += [f"\n; end {fill_rule} fill '{name_id}'\n"]
                     # append gcode
                     self.body.extend(code)
 
             # Render 'stroke' attribute
-            for line_chain in path_curves[name_id]:
-                steps = []
+            steps = []
 
-                # get style info
-                (stroke_width,
-                 stroke_color,
-                 stroke_alpha,
-                 fill_color,
-                 fill_alpha,
-                 fill_rule,
-                 style_pathcut) = get_style_info_of_line_chain(line_chain)
+            # get style info
+            (stroke_width,
+             stroke_color,
+             stroke_alpha,
+             fill_color,
+             fill_alpha,
+             fill_rule,
+             style_pathcut) = get_style_info_of_line_chain(path_curves[name_id][0])
 
-                # catternate lines and remove all 'non move' lines.
-                line_chain = straighten_line_chain(line_chain)
+            if (style_pathcut is not None and style_pathcut == 'true') or self.settings["pathcut"]:
+                # cut path
+                self.body.extend([f"\n; cut path (pathcut set) '{name_id}'"])
+                # set laser power and fan when 'on' or 'engrave'
+                for line_chain in path_curves[name_id]:
+                    # catternate lines and remove all 'non move' lines.
+                    line_chain = straighten_line_chain(line_chain)
 
-                if line_chain.chain_size() == 0:
-                    # no lines need no drawing
-                    continue
-
-                if (style_pathcut is not None and style_pathcut == 'true') or self.settings["pathcut"]:
-                    # cut path
-                    self.body.extend([f"\n; cut path (pathcut set) '{name_id}'"])
+                    if line_chain.chain_size() == 0:
+                        # no lines need no drawing
+                        continue
                     render_pathwidth(line_chain, [0], None, None, boundingbox)
-                elif stroke_color is not None and len(stroke_color):
-                    # Get stroke alpha channel (opacity)
-                    # stroke opacity attribute overrides rgba property
-                    if stroke_alpha is None:
-                        stroke_alpha = 1
-                        rgba = css_color.parse_css_color(stroke_color)
-                        if len(rgba) == 4:
-                            stroke_alpha = rgba[3]
 
-                    # engrave values
-                    # set inversed b&w value (and apply alpha channel, when available)
-                    inverse_bw = round(Image2gcode.linear_power(css_color.parse_css_color2bw8(stroke_color),
-                                                          self.settings["maximum_image_laser_power"]) * stroke_alpha)
-                    # set laser head movement speed
-                    speed = self.settings["image_movement_speed"]
+                self.body.extend([f"\n; end cut path '{name_id}'\n"])
+            elif stroke_color is not None and len(stroke_color):
+                # Get stroke alpha channel (opacity)
+                # stroke opacity attribute overrides rgba property
+                if stroke_alpha is None:
+                    stroke_alpha = 1
+                    rgba = css_color.parse_css_color(stroke_color)
+                    if len(rgba) == 4:
+                        stroke_alpha = rgba[3]
 
-                    # handle option color_coded
-                    if self.settings["color_coded"]:
-                        # get color_coded info
-                        ignorepath, cutpath, engravepath = self.parse_color_coded(stroke_color)
+                # engrave values
+                # set inversed b&w value (and apply alpha channel, when available)
+                inverse_bw = round(Image2gcode.linear_power(css_color.parse_css_color2bw8(stroke_color),
+                                                      self.settings["maximum_image_laser_power"]) * stroke_alpha)
+                # set laser head movement speed
+                speed = self.settings["image_movement_speed"]
 
-                        if not ignorepath:
+                # handle option color_coded
+                if self.settings["color_coded"]:
+                    # get color_coded info
+                    ignorepath, cutpath, engravepath = self.parse_color_coded(stroke_color)
 
-                            if cutpath:
-                                # color_coded set cut path for this stroke_color
-                                self.body.extend([f"\n; --color_coded cut path '{name_id}' (with stroke color '{stroke_color}')"])
+                    if not ignorepath:
+
+                        if cutpath:
+                            # color_coded set cut path for this stroke_color
+                            self.body.extend([f"\n; --color_coded cut path '{name_id}' (with stroke color '{stroke_color}')"])
+                            for line_chain in path_curves[name_id]:
+                                # catternate lines and remove all 'non move' lines.
+                                line_chain = straighten_line_chain(line_chain)
+
+                                if line_chain.chain_size() == 0:
+                                    # no lines need no drawing
+                                    continue
                                 render_pathwidth(line_chain, [0], None, None, boundingbox)
-                                self.body.extend([self.interface.laser_off(fan_off = (self.settings["fan"] == FAN_ON or self.settings["fan"] == FAN_CUT))])
-                                self.body.extend([f"\n; end --color_coded: cut path '{name_id}'\n"])
-                            elif inverse_bw:
-                                if engravepath:
+                            self.body.extend([f"\n; end --color_coded: cut path '{name_id}'\n"])
+                        elif inverse_bw:
+                            if engravepath:
 
-                                    # Get steps (offsets) for the lines that make the border
-                                    steps = get_steps(stroke_width, pixel_size)
+                                # Get steps (offsets) for the lines that make the border
+                                steps = get_steps(stroke_width, pixel_size)
 
-                                    self.body.extend([f"\n; --color_coded: engrave path '{name_id}' with stroke color '{stroke_color}'"])
+                                self.body.extend([f"\n; --color_coded: engrave path '{name_id}' with stroke color '{stroke_color}'"])
+                                for line_chain in path_curves[name_id]:
+                                    # catternate lines and remove all 'non move' lines.
+                                    line_chain = straighten_line_chain(line_chain)
+
+                                    if line_chain.chain_size() == 0:
+                                        # no lines need no drawing
+                                        continue
                                     render_pathwidth(line_chain, steps, inverse_bw, speed, boundingbox)
-                                    # turn laser and fan off
-                                    self.body.extend([self.interface.laser_off(fan_off = (self.settings["fan"] == FAN_ON or self.settings["fan"] == FAN_ENGRAVE))])
-                                    self.body.extend([f"\n; end --color_coded: engrave path '{name_id}'\n"])
-                                else:
-                                    self.body.extend([f"\n; --color_coded: engrave not set for stroke color '{stroke_color}' of  path '{name_id}'"])
-                        else:
-                            # ignore path
-                            self.body.extend([f"\n; --color_coded: ignore path '{name_id}' with stroke color '{stroke_color}'"])
+                                self.body.extend([f"\n; end --color_coded: engrave path '{name_id}'\n"])
+                            else:
+                                self.body.extend([f"\n; --color_coded: engrave not set for stroke color '{stroke_color}' of  path '{name_id}'"])
+                    else:
+                        # ignore path
+                        self.body.extend([f"\n; --color_coded: ignore path '{name_id}' with stroke color '{stroke_color}'"])
 
-                    elif inverse_bw:
-                        # Get steps (offsets) for the lines that make the border
-                        steps = get_steps(stroke_width, pixel_size)
+                elif inverse_bw:
+                    # Get steps (offsets) for the lines that make the border
+                    steps = get_steps(stroke_width, pixel_size)
 
-                        # color_coded isn't set: engrave path with stroke color
-                        self.body.extend([f"\n; engrave path (default) '{name_id}' with stroke color '{stroke_color}'"])
+                    # color_coded isn't set: engrave path with stroke color
+                    self.body.extend([f"\n; engrave path (default) '{name_id}' with stroke color '{stroke_color}'"])
+                    for line_chain in path_curves[name_id]:
+                        # catternate lines and remove all 'non move' lines.
+                        line_chain = straighten_line_chain(line_chain)
+
+                        if line_chain.chain_size() == 0:
+                            # no lines need no drawing
+                            continue
                         render_pathwidth(line_chain, steps, inverse_bw, speed, boundingbox)
-                        # turn laser and fan off
-                        self.body.extend([self.interface.laser_off(fan_off = (self.settings["fan"] == FAN_ON or self.settings["fan"] == FAN_ENGRAVE))])
-                        self.body.extend([f"\n; end engrave path '{name_id}'\n"])
-                else:
-                    # cannot engrave path (ignore)
-                    logger.warning(f"cannot engrave path '{name_id}': no stroke color set")
-                    self.body.extend([f"\n; cannot engrave path '{name_id}': no stroke color set"])
+                    self.body.extend([f"\n; end engrave path '{name_id}'\n"])
+            else:
+                # cannot engrave path (ignore)
+                logger.warning(f"cannot engrave path '{name_id}': no stroke color set")
+                self.body.extend([f"\n; cannot engrave path '{name_id}': no stroke color set"])

@@ -1,5 +1,7 @@
 """Tree functions"""
+import sys
 import re
+import logging
 
 from xml.etree import ElementTree
 from typing import List
@@ -8,6 +10,10 @@ from copy import deepcopy
 from svg2gcode.svg_to_gcode.svg_parser import Path, Transformation
 from svg2gcode.svg_to_gcode.geometry import Curve, RasterImage
 
+# Setup logger, add filter to display  messages only once.
+logger = logging.getLogger(__name__)
+logging.basicConfig(format="[%(levelname)s] %(message)s")
+logger.setLevel(logging.INFO)
 
 NAMESPACES = {'svg': 'http://www.w3.org/2000/svg',
               'xlink':'http://www.w3.org/1999/xlink'}
@@ -227,7 +233,15 @@ def parse_string(svg_string: str, transform_origin=True, viewbox=None, draw_hidd
     :pram origin: translate origin to (origin[0],origin[1]), when None set viewbox upper left to (0,0)
     :return: A list of geometric curves describing the svg. Use the Compiler sub-module to compile them to gcode.
     """
-    root = ElementTree.fromstring(svg_string)
+    try:
+        root = ElementTree.fromstring(svg_string)
+    except ElementTree.ParseError as e:
+        line, column = e.position
+        logger.error(f"Parsing - reading interpreting - of the .svg string failed! Error: '{e}'")
+        logger.error(f"Location the error: line {line}, column {column}")
+        logger.error(f"Exiting ...")
+        sys.exit(1)
+
     addParentInfo(root)
     return parse_root(root, transform_origin, viewbox, draw_hidden, origin=delta_origin, scale=scale_factor, rotate=rotate_deg)
 
@@ -246,6 +260,17 @@ def parse_file(file_path: str, transform_origin=True, viewbox=None, draw_hidden=
     :param origin: translate origin to (origin[0],origin[1]), when None set viewbox upper left to (0,0)
     :return: A list of geometric curves describing the svg. Use the Compiler sub-module to compile them to gcode.
     """
-    root = ElementTree.parse(file_path).getroot()
+
+    try:
+        root = ElementTree.parse(file_path).getroot()
+    except ElementTree.ParseError as e:
+        line, column = e.position
+        logger.error(f"Parsing - reading interpreting - of the .svg file '{file_path}' failed! Error: '{e}'")
+        logger.error(f"Location the error: line {line}, column {column}")
+        logger.error(f"Exiting ...")
+        sys.exit(1)
+
     addParentInfo(root)
     return parse_root(root, transform_origin, viewbox, draw_hidden, origin=delta_origin, scale=scale_factor, rotate=rotate_deg)
+
+    #return parse_root(root, transform_origin, viewbox, draw_hidden, origin=delta_origin, scale=scale_factor, rotate=rotate_deg)

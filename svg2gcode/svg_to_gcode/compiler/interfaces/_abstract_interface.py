@@ -163,3 +163,11 @@ class Interface:
         :return: Appropriate command. If not implemented return ''.
         """
         pass
+
+    def set_fan_state(self, fan_state: str) -> str:
+        """
+        Optional method, if implemented set fan state to gcode command on or off.
+        Only switch for a new state.
+        :return: fan_state or ''
+        """
+        pass

@@ -30,6 +30,7 @@ class Gcode(Interface):
         self._bounding_box = None
         self._unit = None
         self._machine_params = None
+        self._fan_state = "M9"          # fan is off
 
         # Round outputs to the same number of significant figures as the operational tolerance.
         self.precision = abs(round(math.log(TOLERANCES["operation"], 10)))
@@ -160,10 +161,21 @@ class Gcode(Interface):
 
         return command + ''
 
+    def set_fan_state(self, fan_state: str, force = False) -> str:
+        # set fan to a new state or return ''
+        if force or (fan_state != '' and self._fan_state != fan_state):
+            # new state
+            self._fan_state = fan_state
+            return "\n" + fan_state
+
+        # not a new state
+        return ''
+
     def laser_off(self, fan_off = True):
         self._laser_mode = 'M5'
         self._laser_mode_changed = True
-        new_mode = "M5" + ("\nM9" if self._machine_params['fan'] and fan_off else '') # laser off, (fan off when available)
+        new_state = "M9" if self._machine_params['fan'] and fan_off else ''
+        new_mode = "M5" + self.set_fan_state(new_state) # laser off, (fan off when available)
         return f"{new_mode}"
 
     def set_laser_power(self, power, fan_on = True):
@@ -183,7 +195,8 @@ class Gcode(Interface):
         self._next_laser_power = machine_value
 
         # (fan on when available), laser_on
-        new_mode = ("\nM8" if self._machine_params['fan'] and fan_on else '') + ("\n" + self._laser_mode if self._laser_mode_changed else '')
+        new_state = "M8" if self._machine_params['fan'] and fan_on else ''
+        new_mode = self.set_fan_state(new_state) + ("\n" + self._laser_mode if self._laser_mode_changed else '')
         self._laser_mode_changed = False
 	# return laser mode (M3 constant laser power or M4 dynamic laser power) when laser mode changed
         return f"; F{self._next_speed} {self._unit}/min, power S{machine_value}{new_mode}"
