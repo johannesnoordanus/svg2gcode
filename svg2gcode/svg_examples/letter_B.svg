@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="210mm"
+   height="297mm"
+   viewBox="0 0 210 297"
+   version="1.1"
+   id="svg1"
+   inkscape:version="1.4.4 (dcaf3e7d, 2026-05-05)"
+   sodipodi:docname="letter_B.svg"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview1"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:document-units="mm"
+     inkscape:zoom="5.0847803"
+     inkscape:cx="271.00483"
+     inkscape:cy="421.35548"
+     inkscape:window-width="1190"
+     inkscape:window-height="1186"
+     inkscape:window-x="647"
+     inkscape:window-y="101"
+     inkscape:window-maximized="0"
+     inkscape:current-layer="layer1" />
+  <defs
+     id="defs1" />
+  <g
+     inkscape:label="Layer 1"
+     inkscape:groupmode="layer"
+     id="layer1">
+    <path
+       d="m 69.258863,99.634384 v -3.20322 h 2.681109 q 0.437444,0 0.818443,0.05644 0.395111,0.04233 0.691444,0.211667 0.296333,0.169333 0.465667,0.479777 0.169333,0.310445 0.169333,0.846666 0,0.804333 -0.508,1.213555 -0.493888,0.395111 -1.636887,0.395111 z M 67.918308,95.302276 V 105.3776 h 4.86833 q 0.747888,0 1.312332,-0.23989 0.578555,-0.254 0.959555,-0.64911 0.395111,-0.40922 0.592666,-0.93133 0.197555,-0.52211 0.197555,-1.07244 0,-0.93134 -0.493888,-1.58045 -0.493889,-0.64911 -1.425221,-0.84666 v -0.0282 q 0.719666,-0.282217 1.100666,-0.860772 0.39511,-0.592667 0.39511,-1.396999 0,-0.762 -0.352777,-1.284111 -0.338667,-0.52211 -0.832555,-0.818443 -0.225778,-0.141111 -0.550333,-0.211667 -0.310444,-0.07055 -0.677333,-0.09878 -0.366888,-0.04233 -0.747888,-0.04233 -0.366889,-0.01411 -0.691444,-0.01411 z m 1.340555,8.946434 v -3.48544 h 3.062108 q 0.423333,0 0.818444,0.0847 0.395111,0.0706 0.691444,0.26811 0.310444,0.18344 0.493889,0.508 0.183444,0.32455 0.183444,0.81844 0,0.84667 -0.508,1.32645 -0.493888,0.47977 -1.382888,0.47977 z"
+       id="text1"
+       style="font-size:14.1111px;font-family:'Helvetica Neue';-inkscape-font-specification:'Helvetica Neue, Normal';fill:#ff0400;stroke:#000000;stroke-width:.3;stroke-linejoin:round"
+       aria-label="B" />
+  </g>
+</svg>
