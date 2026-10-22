@@ -35,20 +35,43 @@ class LineSegmentChain(Chain):
         self._curves.append(line2)
 
     @staticmethod
-    def clockwise(line_chain, delta: float = .1) -> bool | None:
+    def clockwise(line_chains: List[LineSegmentChain]) -> bool | None:
         """
-        Return true when line chain rotates clockwise using sample delta
+        Return true when line chain rotates clockwise
 
         """
+
+        leftmost_line = None
+        # Search non horizontal line with lowest x
+        if line_chains:
+            for line_chain in line_chains:
+                for line in line_chain:
+                    if leftmost_line == None or leftmost_line.start.x > line.start.x:
+                        leftmost_line = line
+
+        if leftmost_line is not None:
+            d_x = leftmost_line.end.x - leftmost_line.start.x
+            d_y = leftmost_line.end.y - leftmost_line.start.y
+            # This is because line chains are loops - having connected end points - and we
+            # have the leftmost start point, so a line vector (directions) can
+            # either go up (higher y value) and right (higher x value) which indicates
+            # the line chain is rotation clockwise or down which indicates a counter
+            # clockwise rotation.
+            # Another way of viewing this is that the leftmost start point pins the loop
+            # down because lines cannot be left of it.
+            #print(f"leftmost line: start: {leftmost_line.start}, end: {leftmost_line.end}, clockwise: {d_x >= 0 and d_y >= 0}")
+
+            # note that d_x and d_y == 0 cannot occeur because each line segment has a length > 0
+            return d_x >= 0 and d_y >= 0
+
         # Not defined
         return None
-
 
     @staticmethod
     def delta_chain(line_chain, offset: float) -> "LineSegmentChain":
         """
         Return a line chain offset to the given chain. If the chain rotates clockwise a positive offset
-        results in a delta chain outwards of (enclosing) the given line chain.
+        results in a delta chain outwards of (enclosing/wrapping around) the given line chain.
 
         """
         delta_chain = LineSegmentChain()

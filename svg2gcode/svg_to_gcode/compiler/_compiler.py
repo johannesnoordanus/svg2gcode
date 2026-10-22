@@ -732,7 +732,6 @@ class Compiler:
             """
 
             intersections = []
-            print("IN COORRECT FILL")
             # for each fill line check if a delta (offset) line corosses it
             #for fill in fill_lines:
             for i, _ in enumerate(fill_lines):
@@ -775,25 +774,13 @@ class Compiler:
             Render - generate gcode for - a path of certain 'width'.
             """
 
-            nonlocal fill_lines
-
-            print("STEPS: ", max(steps))
             # A path can be an 'engraving' or a 'cut'.
             for step in steps:      # step 'width'
                 if step:
                     # calculate delta chain
                     delta_chain = LineSegmentChain.delta_chain(line_chain, step)
 
-                    #if step == max(steps) or step == min(steps):
-                    if step == max(steps):
-                        # correct fill lines with delta boundaries
-                        correct_fill_lines(delta_chain, fill_lines)
-
-                    print(f"fill_lines[2] in render pathwidth: {fill_lines[2]}")
-
                     # Note that append_line_chain generates a path cut when inverse_bw and speed are set to None.
-                    #if step != max(steps):
-                    #if step == max(steps):
                     self.append_line_chain(delta_chain, step, color, speed)
 
                     # update boundingbox of this 'name_id'
@@ -901,16 +888,21 @@ class Compiler:
                             steps.append(round(-delta * pixel_size, self.precision))
             return steps
 
-        def get_all_intersections(path_curves, y, lefttoright: bool) -> list[tuple[Line,int]]:
+        def get_all_intersections(path_curves, y: float, lefttoright: bool, steps: list[float]) -> list[tuple[Line,int]]:
             """
             Get all intersections of paths for this 'y'
             """
             intersections_info = []
 
-            for line_chain in path_curves:
+            clockwise = LineSegmentChain.clockwise(path_curves)
 
-                # catternate all segmented lines and skip 'non move' lines
-                line_chain = straighten_line_chain(line_chain)
+            for line_chain in path_curves:
+                if line_chain.chain_size() == 0:
+                    # logger.warning("Attempted to parse empty LineChain")
+                    continue
+
+                # offset the linechain inwards
+                line_chain = LineSegmentChain.delta_chain(line_chain, min(steps) if clockwise else max(steps))
 
                 # Calculate all intersections of lines with this horizontal line y
                 for line in line_chain:
@@ -928,14 +920,16 @@ class Compiler:
 
 
         def render_fill_attribute(path_curves: dict[str, LineSegmentChain], name_id: str, boundingbox: Boundingbox):
-            nonlocal code
             # Render svg 'fill' attribute
+
             if not self.settings["nofill"]:
                 # fill a path
 
-                # update boundingbox for this 'name_id'
-                for line_chain in path_curves[name_id]:
-                    for line in line_chain:
+                for curve, _ in enumerate(path_curves[name_id]):
+                    # catternate all segmented lines and skip 'non move' lines
+                    path_curves[name_id][curve] = straighten_line_chain(path_curves[name_id][curve])
+                    # update boundingbox for this 'name_id'
+                    for line in path_curves[name_id][curve]:
                         boundingbox.update(line.start)
                         boundingbox.update(line.end)
 
@@ -980,16 +974,18 @@ class Compiler:
                         #set fan off
                         code += [self.interface.set_fan_state('M9')]
 
+                    # Get steps (offsets) for the lines that make the border
+                    steps = get_steps(stroke_width, pixel_size)
+
                     # collect all fill lines
-                    #fill_lines = LineSegmentChain()
-                    #fill_lines = []
+                    fill_lines = []
 
                     # fill from left to right and reverse
                     lefttoright = True
                     for y in np.arange(round(lowerleft.y, self.precision), round(upperright.y, self.precision), pixel_size):
 
                         # get intersection info of paths with line 'y'
-                        intersections_info = get_all_intersections(path_curves[name_id], y, lefttoright)
+                        intersections_info = get_all_intersections(path_curves[name_id], y, lefttoright, steps)
 
                         # draw fill lines
                         prev_x = 0.0
@@ -1000,15 +996,7 @@ class Compiler:
                         for x in intersections_info:
                             # if prev_x and nonzero_count:
                             if evenodd_count if fill_rule == "evenodd" else nonzero_count:
-                                # draw fill line
-                                # move to start of fill line account for borders (do not overwrite)
-
-                                ###code += [self.interface.rapid_move(prev_x, y)]
-                                # fill from start to end
-                                ###code += [self.interface.linear_move((x[0]), y)]
-
                                 # save fill line
-                                #fill_lines.append(Line(Vector(prev_x, y), Vector(x[0],y)))
                                 fill_lines.append([(prev_x,y), (x[0],y)])
 
                             prev_x = x[0]
@@ -1020,24 +1008,19 @@ class Compiler:
 
                         # switch fill direction
                         lefttoright = not lefttoright
-            print("CODE end", code)
 
-### do not emit code now but after stroke (temporary)
-###                    # emit fill lines
-###                    for filline in fill_lines:
-###                        # goto start of line
-###                        #code += [self.interface.rapid_move(filline.start.x,filline.start.y)]
-###                        code += [self.interface.rapid_move(filline[0][0],filline[0][1])]
-###                        # fill line
-###                        #code += [self.interface.linear_move(filline.end.x,filline.end.y)]
-###                        code += [self.interface.linear_move(filline[1][0],filline[1][1])]
-###
-###                    # turn laser and fan off
-###                    #code += [self.interface.laser_off(fan_off = (self.settings["fan"] == FAN_ON or self.settings["fan"] == FAN_ENGRAVE))]
-###                    code += [f"\n; end {fill_rule} fill '{name_id}'\n"]
-###
-###                    # append gcode
-###                    self.body.extend(code)
+                    # emit fill lines
+                    for filline in fill_lines:
+                        # goto start of line
+                        code += [self.interface.rapid_move(filline[0][0],filline[0][1])]
+                        # fill line
+                        code += [self.interface.linear_move(filline[1][0],filline[1][1])]
+
+                    # turn laser and fan off
+                    code += [f"\n; end {fill_rule} fill '{name_id}'\n"]
+
+                    # append gcode
+                    self.body.extend(code)
 
         def render_stroke_attribute(path_curves: dict[str, LineSegmentChain], name_id: str, boundingbox: Boundingbox):
             # Render 'stroke' attribute
@@ -1190,246 +1173,11 @@ class Compiler:
         for name_id in path_curves:
             # set a boundingbox per 'name_id'
             boundingbox = Boundingbox()
-            fill_lines = []
-            code = []
 
             # note that render_fill below emits code in 'global' code
             # Render 'fill' attribute
             render_fill_attribute(path_curves, name_id, boundingbox)
-            print("CODE after render", code)
 
             # Render 'stroke' attribute
             render_stroke_attribute(path_curves, name_id, boundingbox)
 
-            print(f"fill_lines[2] in emit fill: {fill_lines[2]}")
-
-            # emit fill lines at the end (temporary)
-            for filline in fill_lines:
-                # goto start of line
-                #code += [self.interface.rapid_move(filline.start.x,filline.start.y)]
-                code += [self.interface.rapid_move(filline[0][0],filline[0][1])]
-                # fill line
-                #code += [self.interface.linear_move(filline.end.x,filline.end.y)]
-                code += [self.interface.linear_move(filline[1][0],filline[1][1])]
-
-            # turn laser and fan off
-            #code += [self.interface.laser_off(fan_off = (self.settings["fan"] == FAN_ON or self.settings["fan"] == FAN_ENGRAVE))]
-            #code += [f"\n; end {fill_rule} fill '{name_id}'\n"]
-            code += [f"\n; end fill_rule fill '{name_id}'\n"]
-
-            # append gcode
-            self.body.extend(code)
-"""
-
-            # Render svg 'fill' attribute
-            if not self.settings["nofill"]:
-                # fill a path
-
-                # update boundingbox for this 'name_id'
-                for line_chain in path_curves[name_id]:
-                    for line in line_chain:
-                        boundingbox.update(line.start)
-                        boundingbox.update(line.end)
-
-                # get bounding box info from the path border
-                lowerleft = boundingbox.get().lowerleft
-                upperright = boundingbox.get().upperright
-
-                # assume style info is the same for paths with the same id
-                (stroke_width,
-                 stroke_color,
-                 stroke_alpha,
-                 fill_color,
-                 fill_alpha,
-                 fill_rule,
-                 style_pathcut) = get_style_info_of_line_chain(path_curves[name_id][0])
-
-                # gcode
-                code = [f"\n; {fill_rule} fill '{name_id}'"]
-                code += [self.interface.set_laser_mode(self.settings["laser_mode"])]
-                code += [self.interface.set_movement_speed(self.settings["image_movement_speed"])]
-
-                if fill_color is not None and len(fill_color):
-                    # Get fill alpha channel (opacity)
-                    # fill opacity attribute overrides rgba property
-                    if fill_alpha is None:
-                        fill_alpha = 1
-                        rgba = css_color.parse_css_color(fill_color)
-                        if len(rgba) == 4:
-                            fill_alpha = rgba[3]
-
-                    # engrave values
-                    # set inversed b&w value (and apply alpha channel, when available)
-                    inverse_bw = round(Image2gcode.linear_power(css_color.parse_css_color2bw8(fill_color),
-                                                          self.settings["maximum_image_laser_power"]) * fill_alpha)
-
-                    fan_set = self.settings["fan"] == FAN_ON or self.settings["fan"] == FAN_ENGRAVE
-                    # set laser power and fan when 'on' or 'engrave'
-                    code += [self.interface.set_laser_power_value(inverse_bw, fan_on = fan_set)]
-
-                    # but set it off when needed
-                    if not fan_set:
-                        #set fan off
-                        code += [self.interface.set_fan_state('M9')]
-
-                    # collect all fill lines
-                    #fill_lines = LineSegmentChain()
-                    fill_lines = []
-
-                    # fill from left to right and reverse
-                    lefttoright = True
-                    for y in np.arange(round(lowerleft.y, self.precision), round(upperright.y, self.precision), pixel_size):
-
-                        # get intersection info of paths with line 'y'
-                        intersections_info = get_all_intersections(path_curves[name_id], y, lefttoright)
-
-                        # draw fill lines
-                        prev_x = 0.0
-                        evenodd_count = 0
-                        nonzero_count = 0
-
-                        # iterate over all intersections for this 'y'
-                        for x in intersections_info:
-                            # if prev_x and nonzero_count:
-                            if evenodd_count if fill_rule == "evenodd" else nonzero_count:
-                                # draw fill line
-                                # move to start of fill line account for borders (do not overwrite)
-
-                                ###code += [self.interface.rapid_move(prev_x, y)]
-                                # fill from start to end
-                                ###code += [self.interface.linear_move((x[0]), y)]
-
-                                # save fill line
-                                #fill_lines.append(Line(Vector(prev_x, y), Vector(x[0],y)))
-                                fill_lines.append([(prev_x,y), (x[0],y)])
-
-                            prev_x = x[0]
-
-                            # evenodd rule toggle 1 -> 0 and 0 -> 1
-                            evenodd_count = not evenodd_count
-                            # nonzero rule add edge +1 clockwise or edge -1 counterclockwise (depending on direction of view)
-                            nonzero_count += x[1]
-
-                        # switch fill direction
-                        lefttoright = not lefttoright
-
-                    # emit fill lines
-                    for filline in fill_lines:
-                        # goto start of line
-                        #code += [self.interface.rapid_move(filline.start.x,filline.start.y)]
-                        code += [self.interface.rapid_move(filline[0][0],filline[0][1])]
-                        # fill line
-                        #code += [self.interface.linear_move(filline.end.x,filline.end.y)]
-                        code += [self.interface.linear_move(filline[1][0],filline[1][1])]
-
-                    # turn laser and fan off
-                    #code += [self.interface.laser_off(fan_off = (self.settings["fan"] == FAN_ON or self.settings["fan"] == FAN_ENGRAVE))]
-                    code += [f"\n; end {fill_rule} fill '{name_id}'\n"]
-
-                    # append gcode
-                    self.body.extend(code)
-
-            # Render 'stroke' attribute
-            steps = []
-
-            # get style info
-            (stroke_width,
-             stroke_color,
-             stroke_alpha,
-             fill_color,
-             fill_alpha,
-             fill_rule,
-             style_pathcut) = get_style_info_of_line_chain(path_curves[name_id][0])
-
-            if (style_pathcut is not None and style_pathcut == 'true') or self.settings["pathcut"]:
-                # cut path
-                self.body.extend([f"\n; cut path (pathcut set) '{name_id}'"])
-                # set laser power and fan when 'on' or 'engrave'
-                for line_chain in path_curves[name_id]:
-                    # catternate lines and remove all 'non move' lines.
-                    line_chain = straighten_line_chain(line_chain)
-
-                    if line_chain.chain_size() == 0:
-                        # no lines need no drawing
-                        continue
-                    render_pathwidth(line_chain, [0], None, None, boundingbox)
-
-                self.body.extend([f"\n; end cut path '{name_id}'\n"])
-            elif stroke_color is not None and len(stroke_color):
-                # Get stroke alpha channel (opacity)
-                # stroke opacity attribute overrides rgba property
-                if stroke_alpha is None:
-                    stroke_alpha = 1
-                    rgba = css_color.parse_css_color(stroke_color)
-                    if len(rgba) == 4:
-                        stroke_alpha = rgba[3]
-
-                # engrave values
-                # set inversed b&w value (and apply alpha channel, when available)
-                inverse_bw = round(Image2gcode.linear_power(css_color.parse_css_color2bw8(stroke_color),
-                                                      self.settings["maximum_image_laser_power"]) * stroke_alpha)
-                # set laser head movement speed
-                speed = self.settings["image_movement_speed"]
-
-                # handle option color_coded
-                if self.settings["color_coded"]:
-                    # get color_coded info
-                    ignorepath, cutpath, engravepath = self.parse_color_coded(stroke_color)
-
-                    if not ignorepath:
-
-                        if cutpath:
-                            # color_coded set cut path for this stroke_color
-                            self.body.extend([f"\n; --color_coded cut path '{name_id}' (with stroke color '{stroke_color}')"])
-                            for line_chain in path_curves[name_id]:
-                                # catternate lines and remove all 'non move' lines.
-                                line_chain = straighten_line_chain(line_chain)
-
-                                if line_chain.chain_size() == 0:
-                                    # no lines need no drawing
-                                    continue
-                                render_pathwidth(line_chain, [0], None, None, boundingbox)
-                            self.body.extend([f"\n; end --color_coded: cut path '{name_id}'\n"])
-                        elif inverse_bw:
-                            if engravepath:
-
-                                # Get steps (offsets) for the lines that make the border
-                                steps = get_steps(stroke_width, pixel_size)
-
-                                self.body.extend([f"\n; --color_coded: engrave path '{name_id}' with stroke color '{stroke_color}'"])
-                                for line_chain in path_curves[name_id]:
-                                    # catternate lines and remove all 'non move' lines.
-                                    line_chain = straighten_line_chain(line_chain)
-
-                                    if line_chain.chain_size() == 0:
-                                        # no lines need no drawing
-                                        continue
-                                    render_pathwidth(line_chain, steps, inverse_bw, speed, boundingbox)
-                                self.body.extend([f"\n; end --color_coded: engrave path '{name_id}'\n"])
-                            else:
-                                self.body.extend([f"\n; --color_coded: engrave not set for stroke color '{stroke_color}' of  path '{name_id}'"])
-                    else:
-                        # ignore path
-                        self.body.extend([f"\n; --color_coded: ignore path '{name_id}' with stroke color '{stroke_color}'"])
-
-                elif inverse_bw:
-                    # Get steps (offsets) for the lines that make the border
-                    steps = get_steps(stroke_width, pixel_size)
-
-                    # color_coded isn't set: engrave path with stroke color
-                    self.body.extend([f"\n; engrave path (default) '{name_id}' with stroke color '{stroke_color}'"])
-                    for line_chain in path_curves[name_id]:
-                        # catternate lines and remove all 'non move' lines.
-                        line_chain = straighten_line_chain(line_chain)
-
-                        if line_chain.chain_size() == 0:
-                            # no lines need no drawing
-                            continue
-                        render_pathwidth(line_chain, steps, inverse_bw, speed, boundingbox)
-                    self.body.extend([f"\n; end engrave path '{name_id}'\n"])
-            else:
-                # cannot engrave path (ignore)
-                logger.warning(f"cannot engrave path '{name_id}': no stroke color set")
-                self.body.extend([f"\n; cannot engrave path '{name_id}': no stroke color set"])
-
-"""
