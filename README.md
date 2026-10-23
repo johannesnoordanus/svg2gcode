@@ -2,28 +2,44 @@
 
 ### svg2gcode <small>converts Scalable Vector Graphic drawings - *WYSIWYG* - to GCODE.</small>
 
-Vector graphics files can be manipulated - scaled, rotated, transformed - and be converted to optimised gcode which can be directly used on your laser engraver/cutter. Properties like line thickness, fill and color are all taken into account. They are vector based. Unique is that bitmap images are also supported and drawn alongside and at the same scaling and position as defined in the *.svg* file. Specific lines within the vector drawings can be identified by color name or code and assigned actions like engrave, cut or ignore. All from one command.
+Vector graphics files can be manipulated - scaled, rotated, transformed - and be converted to optimised gcode which can be directly used on your laser engraver/cutter. Properties like line thickness, fill, color and even color transparency are all taken into account. They are vector based.
+
+Unique is that bitmap images are also supported and drawn alongside and at the same scaling and position as defined in the *.svg* file. Specific lines within the vector drawings can be identified by color name or code and assigned actions like engrave, cut or ignore. All from one command.
 
 *svg2gcode* makes use of library *image2gcode* for bitmap conversion to gcode and an updated and corrected version of library *SvgToGcode* for parsing (reading, interpreting) vector graphics files.<sup>(1)</sup>.
 
 ### Version 4.0 is out now!
 **svg2gcode 4.0** has a vastly improved *stroke* and *fill* and is even easier to control.
-Lines with a certain width are now drawn almost perfectly in a vector like manner. 
+Lines of a certain width are now drawn almost perfectly in a vector like manner. 
 *fill* is also a vector (line) fill now. 
 Both types of fill *evenodd* and *nonzero* are supported and use a complete new render engine that directly renders to gcode.
 
-It is very easy to convert text to gcode now, just create a *.svg* file using Inkscape for example, type in some text and convert it via ```object to path``` to a path.
-Save this file in say *letters.svg* and type the following: <sup>(2)</sup>
-```
+It is very easy to convert text to gcode now, just create file *letters.svg* using Inkscape for example <sup>(2)</sup>, type in some text, select it in whole and convert it via ```object to path``` to a *path*. Or instead of using ```object to path``` directly, use menu *Text* and ```Text to Glyphs``` first to get all letters individually and then menu *Path* ```object to path```. 
+
+What this does is to translate general vector graphics 'formula' to vector *path* 'formula' which can be converted by *svg2gcode* to a basic form of line segments only. Which then can be converted to gcode. Note that this conversion does not take line thickness, fill color, transparency etc. - the properties of the path - into account. This is simply not part of the vector formula. It is the responsibility of the renderer i.e. Inkscape to display this correctly.<br>
+*svg2gcode* is also such a renderer.  
+ 
+To continue the example, save the file to *letters.svg* from the vector editor and type the following on the terminal command prompt: <sup>(3)</sup>
+``` 
 > svg2gcode --color_coded "allothercolors = engrave" letters.svg letters.gc
 ```
 This will generate a gcode file *letters.gc* which produces an exact copy of the text on your laser engraver.<br>
-Option *--color_coded* is enhanced and accepts apart from *color* names, ```#hex```, ```rgb```, ```rgba```, ```hsl``` and ```hsla``` color codes.
+To view this result beforehand, you can use *gcode2image*:
+``` 
+> gcode2image --flip --showimage letters.gc letters.png
+```
+This displays a very accurate image of your work, so you can check it before sending it to the laser machine which can be very valuable. *gcode2image* has several other options, one is to show incremental burns. Another way to view the gcode file is to use *NCViewer* to inspect at the point level or see how *fill* and *stroke* drawing takes place. (NCViever is a browser app but runs standalone and even offline and does its gcode processing locally, at least that is claimed) 
 
-As can be seen above a special 'color' ```allothercolors``` is added, which means what you think it means. So we can now name all colors we do not explicitly mention in the option to be able to *'ignore', 'cut' or 'engrave'* all other colors.<br>
-More info on *--color_coded* and other program options and can be found below.
+Version 4.0 has other enhancements.
+Option *--color_coded* which is a binding between drawings in Inkscape and rendering it, accepts now - apart from *color* names - ```#hex```, ```rgb```, ```rgba```, ```hsl``` and ```hsla``` color codes.
+Also, as can be seen above, a special 'color' ```allothercolors``` is added, which means what you think it means.
 
-Fan control has also improved, it is now possible - apart from setting it on or off globally - to have fan on for ```engraving``` or ```cut``` only.
+So we can now name all colors we do not explicitly mention in the option to be able to *'ignore', 'cut' or 'engrave'* all other colors.
+More info on *--color_coded* and other program options and can be seen below.
+
+Fan control is also improved, it is now possible - apart from setting it *on* or *off* globally - to have fan on for ```engraving``` or ```cut``` only, this also works for split files (see option *--splitfiles* below).
+
+The latest improvement in version 4.0.7 is that *fill* now takes line thickness into account. So they - fill and border - don't overlap. Normally in display rendering of graphics a fill followed by drawing of the edge makes a perfect fill optically, but in case of laser engraving this does not work because some lines overlap and cause twice the burn level and so have a somewhat deeper black which can be visible.
 
 I put a lot of work into this program to get it right, but it might be that you encounter errors in which case you can contact me or put in an issue at *https://github.com/johannesnoordanus/svg2gcode*. You can also do a feature request in the same manner.
 
@@ -31,7 +47,9 @@ Have fun using it.
 
 Johannes
 
-<sup>(2)</sup> It is also possible to leave out option *--color-coded* because engraving is the default.
+
+<sup>(2)</sup> I recommend using a recent Inkscape (v.1.4.4 and higher) and use it to create content to display on your laser machine. It is far superior and qualitatively better (superior rendering) than 'all in' software is able to provide. To learn using Inkscape is valuable because it is allround applicable and you have a maximum of expressive capabilities. (I'm not connected in any way to the free and open source software project Inkscape, by the way. I just think that it is smart to use the software that works best.)<br>
+<sup>(3)</sup> It is also possible to leave out option '--color-coded' because engraving is the default.
 
  -----
 ### General description
@@ -51,7 +69,7 @@ More info can be obtained by looking at the documentation and examples below and
 
 *svg2gcode* has three related programs: *image2gcode* mentioned above has similar capabilities but handles raster image files (like *png* and *jpg*) directly, *gcode2image* performs the inverse function and is capable of showing multiple writes (burns) to the same location and last *grblhud* which gives full control over gcode execution.
 
-<sup>(1)</sup> *image2gcode* can be found here: *https://github.com/johannesnoordanus/image2gcode*, the updated library *SvgToGcode* can be found here: *https://github.com/johannesnoordanus/SvgToGcode*. Note that python library and program *image2gcode* will be installed alongside when installing via *pip* and that *SvgToGcode* is included in *svg2gcode*.
+<sup>(1)</sup> *image2gcode* can be found here: *https://github.com/johannesnoordanus/image2gcode*, the updated library *SvgToGcode* can be found here: *https://github.com/johannesnoordanus/SvgToGcode*. Note that python library and program *image2gcode* will be installed alongside when installing via *pip* and that library *SvgToGcode* is also included.
 
  -----
 
@@ -72,7 +90,7 @@ With option ```svg2gcode --fillrule "evenodd|nonzero"``` you can set your own pr
 
 As seen above, not all *svg* elements are directly supported, but they are after a *path* conversion within the composer (Inkscape: ```menu Path->Object/Stroke to Path```). Without a *path* conversion *svg2gcode* simply ignores all elements except *path* and *image*. 
 
-Depending on your preference text (fonts) require another step in Inkscape after *selecting* all text and clicking menu ```Object to Path```. Clicking menu```Object->Ungroup``` <sup>(3)</sup> generates a separate *path* for each letter which contains all relevant attributes. (Otherwise Inkscape uses a group tag ```<g``` to set some attributes for all letters within the text that are not repeated for each individual letter.)
+Depending on your preference text (fonts) require another step in Inkscape after *selecting* all text and clicking menu ```Object to Path```. Clicking menu```Object->Ungroup``` <sup>(4)</sup> generates a separate *path* for each letter which contains all relevant attributes. (Otherwise Inkscape uses a group tag ```<g``` to set some attributes for all letters within the text that are not repeated for each individual letter.)
 
 If you *Ungroup* each character is rendered separately to gcode and this means that *stroke* and *fill* is done per character. Version 4.0 of *svg2gcode* has no problem rendering - do *stroke* and *fill* - for all text combined but note that it is a different situation.
 
@@ -115,7 +133,7 @@ Lines having color code *#0F0F0F* will be engraved and line having color name 'g
  - images can be in several formats (my tests included *.png* and  *.jpg* image files)
  - vector graphics (*.svg*) source documents must be in unit 'mm' and set to ```1 'user unit' is 1 mm``` (Inkscape default)
 
-<sup>(3)</sup> Note that the latest version of *svg2gcode* (4.0.0) has support for ```<g``` tags (attribute inheritance) and is able to correctly convert text without ```Ungroup```.
+<sup>(4)</sup> Note that the latest version of *svg2gcode* (4.0.0) has support for ```<g``` tags (attribute inheritance) and is able to correctly convert text without ```Ungroup```.
 
 ### Important Commandline options
 
