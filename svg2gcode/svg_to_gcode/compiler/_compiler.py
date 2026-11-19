@@ -946,11 +946,6 @@ class Compiler:
                  fill_rule,
                  style_pathcut) = get_style_info_of_line_chain(path_curves[name_id][0])
 
-                # gcode
-                code = [f"\n; {fill_rule} fill '{name_id}'"]
-                code += [self.interface.set_laser_mode(self.settings["laser_mode"])]
-                code += [self.interface.set_movement_speed(self.settings["image_movement_speed"])]
-
                 if fill_color is not None and len(fill_color):
                     # Get fill alpha channel (opacity)
                     # fill opacity attribute overrides rgba property
@@ -965,62 +960,70 @@ class Compiler:
                     inverse_bw = round(Image2gcode.linear_power(css_color.parse_css_color2bw8(fill_color),
                                                           self.settings["maximum_image_laser_power"]) * fill_alpha)
 
-                    fan_set = self.settings["fan"] == FAN_ON or self.settings["fan"] == FAN_ENGRAVE
-                    # set laser power and fan when 'on' or 'engrave'
-                    code += [self.interface.set_laser_power_value(inverse_bw, fan_on = fan_set)]
+                    # Note: ignore/skip fill of burn level 0.
+                    if inverse_bw:
 
-                    # but set it off when needed
-                    if not fan_set:
-                        #set fan off
-                        code += [self.interface.set_fan_state('M9')]
+                        # gcode
+                        code = [f"\n; {fill_rule} fill '{name_id}'"]
+                        code += [self.interface.set_laser_mode(self.settings["laser_mode"])]
+                        code += [self.interface.set_movement_speed(self.settings["image_movement_speed"])]
 
-                    # Get steps (offsets) for the lines that make the border
-                    steps = get_steps(stroke_width, pixel_size)
+                        fan_set = self.settings["fan"] == FAN_ON or self.settings["fan"] == FAN_ENGRAVE
+                        # set laser power and fan when 'on' or 'engrave'
+                        code += [self.interface.set_laser_power_value(inverse_bw, fan_on = fan_set)]
 
-                    # collect all fill lines
-                    fill_lines = []
+                        # but set it off when needed
+                        if not fan_set:
+                            #set fan off
+                            code += [self.interface.set_fan_state('M9')]
 
-                    # fill from left to right and reverse
-                    lefttoright = True
-                    for y in np.arange(round(lowerleft.y, self.precision), round(upperright.y, self.precision), pixel_size):
+                        # Get steps (offsets) for the lines that make the border
+                        steps = get_steps(stroke_width, pixel_size)
 
-                        # get intersection info of paths with line 'y'
-                        intersections_info = get_all_intersections(path_curves[name_id], y, lefttoright, steps)
+                        # collect all fill lines
+                        fill_lines = []
 
-                        # draw fill lines
-                        prev_x = 0.0
-                        evenodd_count = 0
-                        nonzero_count = 0
+                        # fill from left to right and reverse
+                        lefttoright = True
+                        for y in np.arange(round(lowerleft.y, self.precision), round(upperright.y, self.precision), pixel_size):
 
-                        # iterate over all intersections for this 'y'
-                        for x in intersections_info:
-                            # if prev_x and nonzero_count:
-                            if evenodd_count if fill_rule == "evenodd" else nonzero_count:
-                                # save fill line
-                                fill_lines.append([(prev_x,y), (x[0],y)])
+                            # get intersection info of paths with line 'y'
+                            intersections_info = get_all_intersections(path_curves[name_id], y, lefttoright, steps)
 
-                            prev_x = x[0]
+                            # draw fill lines
+                            prev_x = 0.0
+                            evenodd_count = 0
+                            nonzero_count = 0
 
-                            # evenodd rule toggle 1 -> 0 and 0 -> 1
-                            evenodd_count = not evenodd_count
-                            # nonzero rule add edge +1 clockwise or edge -1 counterclockwise (depending on direction of view)
-                            nonzero_count += x[1]
+                            # iterate over all intersections for this 'y'
+                            for x in intersections_info:
+                                # if prev_x and nonzero_count:
+                                if evenodd_count if fill_rule == "evenodd" else nonzero_count:
+                                    # save fill line
+                                    fill_lines.append([(prev_x,y), (x[0],y)])
 
-                        # switch fill direction
-                        lefttoright = not lefttoright
+                                prev_x = x[0]
 
-                    # emit fill lines
-                    for filline in fill_lines:
-                        # goto start of line
-                        code += [self.interface.rapid_move(filline[0][0],filline[0][1])]
-                        # fill line
-                        code += [self.interface.linear_move(filline[1][0],filline[1][1])]
+                                # evenodd rule toggle 1 -> 0 and 0 -> 1
+                                evenodd_count = not evenodd_count
+                                # nonzero rule add edge +1 clockwise or edge -1 counterclockwise (depending on direction of view)
+                                nonzero_count += x[1]
 
-                    # turn laser and fan off
-                    code += [f"\n; end {fill_rule} fill '{name_id}'\n"]
+                            # switch fill direction
+                            lefttoright = not lefttoright
 
-                    # append gcode
-                    self.body.extend(code)
+                        # emit fill lines
+                        for filline in fill_lines:
+                            # goto start of line
+                            code += [self.interface.rapid_move(filline[0][0],filline[0][1])]
+                            # fill line
+                            code += [self.interface.linear_move(filline[1][0],filline[1][1])]
+
+                        # turn laser and fan off
+                        code += [f"\n; end {fill_rule} fill '{name_id}'\n"]
+
+                        # append gcode
+                        self.body.extend(code)
 
         def render_stroke_attribute(path_curves: dict[str, LineSegmentChain], name_id: str, boundingbox: Boundingbox):
             # Render 'stroke' attribute
@@ -1062,6 +1065,7 @@ class Compiler:
                 # set inversed b&w value (and apply alpha channel, when available)
                 inverse_bw = round(Image2gcode.linear_power(css_color.parse_css_color2bw8(stroke_color),
                                                       self.settings["maximum_image_laser_power"]) * stroke_alpha)
+
                 # set laser head movement speed
                 speed = self.settings["image_movement_speed"]
 
@@ -1107,6 +1111,7 @@ class Compiler:
                         self.body.extend([f"\n; --color_coded: ignore path '{name_id}' with stroke color '{stroke_color}'"])
 
                 elif inverse_bw:
+                    # ignore/skip zero intencity (0) burn levels
                     # Get steps (offsets) for the lines that make the border
                     steps = get_steps(stroke_width, pixel_size)
 
