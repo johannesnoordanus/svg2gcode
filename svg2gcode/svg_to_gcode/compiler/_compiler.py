@@ -732,29 +732,17 @@ class Compiler:
             """
 
             intersections = []
-            # for each fill line check if a delta (offset) line corosses it
-            #for fill in fill_lines:
+            # for each fill line check if a delta (offset) line crosses it
             for i, _ in enumerate(fill_lines):
                 for delta in delta_chain:
 
                     intersection = Line.line_intersection(delta, Line(Vector(*fill_lines[i][0]),Vector(*fill_lines[i][1])), strict = True, precision = 6)
-                    #if (74.834299 - 0.0000001) <= fill[1][0] <= (74.834299 + 0.0000001):
-                    #    if intersection is not None:
-                    #        print(f"FILL INTERSECTION: {fill}, intersection: {intersection}, delta: {delta}")
 
                     if intersection is not None:
                         # fix this fill line end point with this intersection
                         # note that the distance to one of the endpoints of the line should be less or equal to
                         # the offsey of the delta line.
                         intersections.append(intersection)
-
-                        #[(np.float64(74.21471), np.float64(191.92239999999998)), (np.float64(67.918308), np.float64(191.92239999999998))]
-                        #intersection: Vector(68.018308, 191.9224)
-
-                        #2: intersection: Vector(73.965934, 191.9224)
-                        #2: BEFORE fill: [(np.float64(74.21471), np.float64(191.92239999999998)), (np.float64(68.018308), np.float64(191.92239999999998))]
-                        #2: in <=: [(np.float64(73.965934), np.float64(191.92239999999998)), (np.float64(67.918308), np.float64(191.92239999999998))]
-                        #2: AFTER fill: [(np.float64(73.965934), np.float64(191.92239999999998)), (np.float64(67.918308), np.float64(191.92239999999998))]
 
                         # select nearest endpoint and correct endpoint of fill line
                         if abs(fill_lines[i][0][0] - intersection.x) <= abs(fill_lines[i][1][0] - intersection.x):
@@ -763,10 +751,9 @@ class Compiler:
                         else:
                             fill_lines[i] = [fill_lines[i][0],(intersection.x, fill_lines[i][1][1])]
 
-                        # only one crossing at max should exist
-                        # this isn't true, expect to see 2 or more intersections
-                        # this from start and end (at a short distance, and maybe other insersections
-                        # in between.
+                        # multiple crossings exist, expect to see 2 or more intersections
+                        # this from start and end at a short distance, and maybe other
+                        # insersections in between.
                         #break
 
         def render_pathwidth(line_chain: LineSegmentChain, steps: list[float], color: int | None = None, speed: int | None = None, boundingbox = None):
@@ -875,7 +862,7 @@ class Compiler:
             # line crosses Y pointing down
             return direction_right
 
-        def get_steps(stroke_width, pixel_size) -> list[float]:
+        def get_steps(stroke_width) -> list[float]:
             """
             Get steps/offsets of - a multiple of - pixelsize around a line.
             """
@@ -978,7 +965,7 @@ class Compiler:
                             code += [self.interface.set_fan_state('M9')]
 
                         # Get steps (offsets) for the lines that make the border
-                        steps = get_steps(stroke_width, pixel_size)
+                        steps = get_steps(stroke_width)
 
                         # collect all fill lines
                         fill_lines = []
@@ -1019,7 +1006,8 @@ class Compiler:
                             # fill line
                             code += [self.interface.linear_move(filline[1][0],filline[1][1])]
 
-                        # turn laser and fan off
+                        # Note that laser and fan off is determined by the start of the next section
+                        # rendering stroke or images or by the footer at program end.
                         code += [f"\n; end {fill_rule} fill '{name_id}'\n"]
 
                         # append gcode
@@ -1092,7 +1080,7 @@ class Compiler:
                             if engravepath:
 
                                 # Get steps (offsets) for the lines that make the border
-                                steps = get_steps(stroke_width, pixel_size)
+                                steps = get_steps(stroke_width)
 
                                 self.body.extend([f"\n; --color_coded: engrave path '{name_id}' with stroke color '{stroke_color}'"])
                                 for line_chain in path_curves[name_id]:
@@ -1113,7 +1101,7 @@ class Compiler:
                 elif inverse_bw:
                     # ignore/skip zero intencity (0) burn levels
                     # Get steps (offsets) for the lines that make the border
-                    steps = get_steps(stroke_width, pixel_size)
+                    steps = get_steps(stroke_width)
 
                     # color_coded isn't set: engrave path with stroke color
                     self.body.extend([f"\n; engrave path (default) '{name_id}' with stroke color '{stroke_color}'"])
