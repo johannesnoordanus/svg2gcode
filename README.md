@@ -11,7 +11,7 @@ This all from one command.
 
 --
 
-Exciting times as I have discovered that deep black laser engravings are possible on polished (stainless)steel using a 10W 0.08 mm<sup>(2)</sup> - practically 0.1 mm<sup>(2)</sup> - beam laser. Settings: speed 200mm/min and intensity 1000 (full power).<br>
+Exciting times as I have discovered that deep black laser engravings are possible on polished (stainless)steel using a 10W 0.08 mm<sup>2</sup> - practically 0.1 mm<sup>2</sup> - beam laser. Settings: speed 200mm/min and intensity 1000 (full power).<br>
 I can get incredible detail in text and have good images.
 
 ### Version 4.1 is out now!
