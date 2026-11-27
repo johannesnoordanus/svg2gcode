@@ -134,16 +134,12 @@ class Compiler:
 
         gcode = []
 
-        if not self.check_bounds():
-            if self.settings["distance_mode"] == "absolute" and self.check_axis_maximum_travel():
-                logger.warning("Cut is not within machine bounds.")
-                gcode += ["; WARNING: Cut is not within machine bounds of "
-                          f"X[0,{self.settings['x_axis_maximum_travel']}], Y[0,{self.settings['y_axis_maximum_travel']}]\n",]
-            elif not self.check_axis_maximum_travel():
-                logger.warning("Please define machine cutting area, set parameter: 'x_axis_maximum_travel' and 'y_axis_maximum_travel'")
-                gcode += ["; WARNING: Please define machine cutting area, set parameter: 'x_axis_maximum_travel' and 'y_axis_maximum_travel'\n",]
-            else:
-                gcode += [f"; WARNING: distance mode is not absolute: {self.settings['distance_mode']}\n",]
+        checkbounds = self.check_bounds()
+        if checkbounds is not None and not checkbounds:
+            logger.warning(f"Engaving or cut is not within machine bounds of"
+                           f" X[0,{self.settings['x_axis_maximum_travel']}], Y[0,{self.settings['y_axis_maximum_travel']}]")
+            gcode += ["; WARNING: Engraving or cut is not within machine bounds of "
+                      f"X[0,{self.settings['x_axis_maximum_travel']}], Y[0,{self.settings['y_axis_maximum_travel']}]\n",]
 
 	# add generator info and boundingbox for this code
 
@@ -159,9 +155,10 @@ class Compiler:
 
         gcode += [ f";    svg2gcode {__version__} ({str(datetime.now()).split('.',maxsplit=1)[0]})",
                    f";    arguments: \n{params}",]
+
         if self.boundingbox.get():
             center = self.boundingbox.center()
-            gcode += [ f";    {self.boundingbox}",
+            gcode += [ f";    boundingbox: {self.boundingbox} in {self.settings['unit']}",
                        f";    boundingbox center: (X{center[0]:.{0 if center[0].is_integer() else self.precision}f},"
                        f"Y{center[1]:.{0 if center[1].is_integer() else self.precision}f})" ]
 
@@ -214,7 +211,7 @@ class Compiler:
 
         return '\n'.join(header_gc + self.gcode)
 
-    def compile_to_file(self, file_name: str, svg_file_name: str, curves: list[Curve], passes=1):
+    def compile_to_file(self, file_name: str, svg_file_name: str, curves: list[Curve], passes=1, write: bool = True):
         """
         A wrapper for the self.compile method. Assembles the code in the header, body and footer, saving it to a file.
 
@@ -252,38 +249,42 @@ class Compiler:
         # - self.gcode (image gcode)
         self.append_curves(curves)
 
-        # check svg file content
-        if len(self.body) == 0 and len(self.gcode) == 0:
-            logger.error(f"No paths and images to draw, input file '{svg_file_name}' is no vector file?")
+        if write:
+            # check svg file content
+            if len(self.body) == 0 and len(self.gcode) == 0:
+                logger.error(f"No paths and images to draw, input file '{svg_file_name}' is no vector file?")
 
-        header = '\n'.join(self.header) + '\n'
-        footer = '\n'.join(self.footer) + '\n'
+            header = '\n'.join(self.header) + '\n'
+            footer = '\n'.join(self.footer) + '\n'
 
-        if len(self.body) > 0:
-            # write path objects
-            with open(file_name, 'w') as file:
-                program_end = footer if (self.settings["splitfile"] or len(self.gcode) == 0) else ""
-                file.write(self.gcode_file_header() + header + self.compile(passes=passes) + '\n' + program_end)
-                logger.info(f"Path drawings written to '{file_name}'")
-        else:
-            logger.warning(f"No paths to draw, nothing to write to '{file_name}', skipping")
-
-        image_file_name = file_name.rsplit('.',1)[0] + "_images." + file_name.rsplit('.',1)[1]
-        if len(self.gcode) == 0:
-            if self.settings["splitfile"]:
-                logger.warning(f"No images to draw, nothing to write to '{image_file_name}', skipping")
-        else:
-            if self.settings["splitfile"]:
-                # emit image objects to <filename>_images.<gcext>
-                with open(image_file_name, 'w') as file:
-                    file.write(self.gcode_file_header() + header + self.compile_images() + '\n' + footer)
-                    logger.info(f"Image drawings written to '{image_file_name}'")
+            if len(self.body) > 0:
+                # write path objects
+                with open(file_name, 'w') as file:
+                    program_end = footer if (self.settings["splitfile"] or len(self.gcode) == 0) else ""
+                    file.write(self.gcode_file_header() + header + self.compile(passes=passes) + '\n' + program_end)
+                    logger.info(f"Path drawings written to '{file_name}'")
             else:
-                # emit images objects in same file
-                open_mode = 'w' if len(self.body) == 0 else 'a+'
-                with open(file_name, open_mode) as file:
-                    file.write((self.gcode_file_header() if len(self.body) == 0 else "") + '\n' +  self.compile_images() + '\n' + footer)
-                    logger.info(f"Added image drawings to '{file_name}'")
+                logger.warning(f"No paths to draw, nothing to write to '{file_name}', skipping")
+
+            image_file_name = file_name.rsplit('.',1)[0] + "_images." + file_name.rsplit('.',1)[1]
+            if len(self.gcode) == 0:
+                if self.settings["splitfile"]:
+                    logger.warning(f"No images to draw, nothing to write to '{image_file_name}', skipping")
+            else:
+                if self.settings["splitfile"]:
+                    # emit image objects to <filename>_images.<gcext>
+                    with open(image_file_name, 'w') as file:
+                        file.write(self.gcode_file_header() + header + self.compile_images() + '\n' + footer)
+                        logger.info(f"Image drawings written to '{image_file_name}'")
+                else:
+                    # emit images objects in same file
+                    open_mode = 'w' if len(self.body) == 0 else 'a+'
+                    with open(file_name, open_mode) as file:
+                        file.write((self.gcode_file_header() if len(self.body) == 0 else "") + '\n' +  self.compile_images() + '\n' + footer)
+                        logger.info(f"Added image drawings to '{file_name}'")
+
+            if len(self.body) > 0 or len(self.gcode) > 0:
+                logger.info(f"Engrave and cutting area: (lower-left:upper-right){self.boundingbox} in {self.settings['unit']}")
 
     def append_line_chain(self, line_chain: LineSegmentChain, step: float, color: int | None = None, speed: int | None = None):
         """
@@ -699,14 +700,13 @@ class Compiler:
 
         """
         return self.settings["x_axis_maximum_travel"] is not None and self.settings["y_axis_maximum_travel"] is not None
-        # logger.warning("Please define machine cutting area, set parameter: 'x_axis_maximum_travel' and 'y_axis_maximum_travel'")
 
-    def check_bounds(self):
+    def check_bounds(self) -> bool | None :
         """
         Check if line segments are within the machine cutting area. Note that machine coordinate mode must
         be absolute and machine parameters 'x_axis_maximum_travel' and 'y_axis_maximum_travel' are set, also
         bounding box must be in the positive quadrant.
-        :return true when box is in machine area bounds, false otherwise
+        :return None when preconditions are not met otherwise true when box is in machine area bounds or false when not
         """
 
         if self.settings["distance_mode"] == "absolute" and self.check_axis_maximum_travel() and self.boundingbox.get():
@@ -715,11 +715,11 @@ class Compiler:
 
             # bbox[0] == lowerleft, bbox[1] == uperright, bbox[0/1][0] == x, bbox[0/1][1] == y
             #      lower left x and y >= 0 and upperright x and y <= resp. machine max x and y
-            return (bbox[0][0] >= 0 and bbox[0][1] >=0
-                    and bbox[1][0] * (25.4 if self.settings["unit"] == "inch" else 1) <= machine_max.x
-                    and bbox[1][1] * (25.4 if self.settings["unit"] == "inch" else 1) <= machine_max.y)
+            if bbox[0][0] >= 0 and bbox[0][1] >=0:
+                return ((bbox[1][0] * (25.4 if self.settings["unit"] == "inch" else 1) <= machine_max.x) and
+                       (bbox[1][1] * (25.4 if self.settings["unit"] == "inch" else 1) <= machine_max.y))
 
-        return False
+        return None
 
     def append_curves(self, curves: list[Curve]):
         """

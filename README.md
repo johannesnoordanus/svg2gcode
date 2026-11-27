@@ -4,9 +4,34 @@
 
 Vector graphics files can be manipulated - scaled, rotated, transformed - and be converted to optimised gcode which can be directly used on your laser engraver/cutter. Properties like line thickness, fill, color and even color transparency are all taken into account. They are vector based.
 
-Unique is that bitmap images are also supported and drawn alongside and at the same scaling and position as defined in the *.svg* file. Specific lines within the vector drawings can be identified by color name or code and assigned actions like engrave, cut or ignore. All from one command.
+Unique is that bitmap images are also supported and drawn alongside and at the same scaling and position as defined in the *.svg* file. Specific lines within the vector drawings can be identified by color name or code and assigned actions like engrave, cut or ignore. Additionally the origin of the engraving and cutting area can be set to center or another machine location indicated.
+This all from one command.
 
 *svg2gcode* makes use of library *image2gcode* for bitmap conversion to gcode and an updated and corrected version of library *SvgToGcode* for parsing (reading, interpreting) vector graphics files.<sup>(1)</sup>.
+
+--
+
+Exciting times as I have discovered that deep black laser engravings are possible on polished (stainless)steel using a 10W 0.08 mm<sup>(2)</sup> - practically 0.1 mm<sup>(2)</sup> - beam laser. Settings: speed 200mm/min and intensity 1000 (full power).<br>
+I can get incredible detail in text and have good images.
+
+### Version 4.1 is out now!
+**svg2gcode 4.1** has improved control over the gcode end result.<br>Option ```--origin machine-x machine-y``` now sets the *lower left* of the engraving and cutting area to the machine location indicated. When set to *0 0* the engraving and cutting area will be immediately above the machine x axis and immediately to the right of the machine y axis which makes it easy to place the object to engrave.<br>
+Additionally the unaltered option ```--selfcenter``` makes it possible to easily place the object to engrave using the center as alignment.
+Also program reporting is streamlined a bit and now shows additional information about the machine location of the engraving and cut area:
+```
+svg2gcode --origin 0 0 tag_Kye_back.svg tag_Kye_back.gc  
+[INFO] Path drawings written to 'tag_Kye_back.gc'
+[INFO] Added image drawings to 'tag_Kye_back.gc'
+[INFO] Engrave and cutting area: (lower-left:upper-right)(X-0.0,Y0.0:X25.4,Y25.4) in mm
+```
+--
+
+I put a lot of work into this program to get it right, but it might be that you encounter errors in which case you can contact me or put in an issue at *https://github.com/johannesnoordanus/svg2gcode*. You can also do a feature request in the same manner.
+Note that this projects is fully hand coded by me and that I intent to support it for many years to come.
+
+Have fun using it.
+
+Johannes
 
 ### Version 4.0 is out now!
 **svg2gcode 4.0** has a vastly improved *stroke* and *fill* and is even easier to control.
@@ -40,13 +65,6 @@ More info on *--color_coded* and other program options and can be seen below.
 Fan control is also improved, it is now possible - apart from setting it *on* or *off* globally - to have fan on for ```engraving``` or ```cut``` only, this also works for split files (see option *--splitfiles* below).
 
 The latest improvement in version 4.0.7 is that *fill* now takes line thickness into account. So they - fill and border - don't overlap. Normally in display rendering of graphics a fill followed by drawing of the edge makes a perfect fill optically, but in case of laser engraving this does not work because some lines overlap and cause twice the burn level and so have a somewhat deeper black which can be visible.
-
-I put a lot of work into this program to get it right, but it might be that you encounter errors in which case you can contact me or put in an issue at *https://github.com/johannesnoordanus/svg2gcode*. You can also do a feature request in the same manner.
-
-Have fun using it.
-
-Johannes
-
 
 <sup>(2)</sup> I recommend using a recent Inkscape (v.1.4.4 and higher) and use it to create content to display on your laser machine. It is far superior and qualitatively better (superior rendering) than 'all in' software is able to provide. To learn using Inkscape is valuable because it is allround applicable and you have a maximum of expressive capabilities. (I'm not connected in any way to the free and open source software project Inkscape, by the way. I just think that it is smart to use the software that works best.)<br>
 <sup>(3)</sup> It is also possible to leave out option '--color-coded' because engraving is the default.
@@ -224,12 +242,13 @@ Some linux distributions use a managed environment in which you cannot install p
 
 ### Usage:
 ```
-> svg2gcode --help
-usage: svg2gcode     [-h] [--showimage] [--selfcenter] [--pixelsize <default:0.1>] [--imagespeed <default:800>] [--cuttingspeed <default:1000>] [--imagepower <default:300>] [--poweroffset <default:0>]
-                     [--cuttingpower <default:850>] [--passes <default:1>] [--pass_depth <default:0>] [--rapidmove <default:10>] [--noise <default:0>] [--overscan <default:0>] [--showoverscan]
-                     [--constantburn | --no-constantburn] [--origin delta-x delta-y] [--scale factor-x factor-y] [--rotate <default:0>] [--splitfile] [--pathcut] [--nofill] [--fillrule <default:"nonzero">]
-                     [--xmaxtravel <default:300>] [--ymaxtravel <default:400>] [--color_coded <default:"">] [--fan <default:"off">] [-V]
-                     svg gcode
+vg2gcode --help                                       
+usage: runsvg2gcode [-h] [--showimage] [--pixelsize <default:0.1>] [--imagespeed <default:800>] [--cuttingspeed <default:1000>] [--imagepower <default:300>]
+                    [--poweroffset <default:0>] [--cuttingpower <default:850>] [--passes <default:1>] [--pass_depth <default:0>] [--rapidmove <default:10>]
+                    [--noise <default:0>] [--overscan <default:0>] [--showoverscan] [--constantburn | --no-constantburn] [--selfcenter] [--origin origin-x origin-y]
+                    [--scale factor-x factor-y] [--rotate <default:0>] [--splitfile] [--pathcut] [--nofill] [--fillrule <default:"nonzero">] [--xmaxtravel <default:300>]
+                    [--ymaxtravel <default:400>] [--color_coded <default:"">] [--fan <default:"off">] [-V]
+                    svg gcode
 
 Convert svg to gcode for GRBL v1.1 compatible diode laser engravers.
 
@@ -240,7 +259,6 @@ positional arguments:
 options:
   -h, --help            show this help message and exit
   --showimage           show b&w converted image
-  --selfcenter          self center the gcode (--origin cannot be used at the same time)
   --pixelsize <default:0.1>
                         pixel size in mm (XY-axis): each image pixel is drawn this size
   --imagespeed <default:800>
@@ -264,13 +282,14 @@ options:
   --showoverscan        show overscan pixels (note that this is visible and part of the gcode emitted!)
   --constantburn, --no-constantburn
                         default constant burn mode (M3)
-  --origin delta-x delta-y
-                        translate origin by vector (delta-x,delta-y) in mm (default not set, option --selfcenter cannot be used at the same time)
+  --selfcenter          self center the gcode; (0,0) is at the center of the engrave and cut area, option --origin cannot be used at the same time
+  --origin origin-x origin-y
+                        set lower left of engrave and cut area to (origin-x,origin-y), option --selfcenter cannot be used at the same time
   --scale factor-x factor-y
                         scale svg with (factor-x,factor-y) (default not set)
   --rotate <default:0>  number of degrees to rotate
   --splitfile           split gcode output of SVG path and image objects
-  --pathcut             alway cut SVG path objects! (use laser power set with option --cuttingpower)
+  --pathcut             alway cut SVG path objects! (uses --cuttingpower)
   --nofill              ignore SVG fill attribute
   --fillrule <default:"nonzero">
                         set fill rule to [nonzero|evenodd]
@@ -279,10 +298,10 @@ options:
   --ymaxtravel <default:400>
                         machine y-axis lengh in mm
   --color_coded <default:"">
-                        set action for path with specific stroke color "[[color|allothercolors] = [cut|engrave|ignore] *]*", example: --color_coded "black = ignore purple = cut blue = engrave allothercolors
-                        = ignore"
+                        set action for path with specific stroke color "[[color|allothercolors] = [cut|engrave|ignore] *]*"
+                        , example: --color_coded "black = ignore purple = cut blue = engrave allothercolors = ignore"
   --fan <default:"off">
-                        set fan [on|off|on_engrave|on_cut]
+                        set fan [on|on_engrave|on_cut]
   -V, --version         show version number and exit
 ```
 

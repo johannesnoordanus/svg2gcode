@@ -23,8 +23,29 @@ from svg2gcode.svg_to_gcode import css_color
 
 config_file = os.path.expanduser('~/.config/svg2gcode.toml')
 
+class OnceFilter(logging.Filter):
+    """log same messages only once"""
+    def __init__(self):
+        super().__init__()
+        self.logged_messages = set()
+
+    def filter(self, record):
+        # Use message string is key
+        log_entry = record.getMessage()
+        if log_entry in self.logged_messages:
+            # duplicate if message in set()
+            return False  # Do not log
+        self.logged_messages.add(log_entry)
+        return True  # Log it
+
 # Set logging global disable flag
 ##logging.disable(logging.CRITICAL + 1)
+# Setup logger, add filter to display  messages only once.
+logger = logging.getLogger(__name__)
+logger.addFilter(OnceFilter())
+logging.basicConfig(format="[%(levelname)s] %(message)s")
+logger.setLevel(logging.INFO)
+
 
 # Set warnings disable flag (use python option -W to enable warnings)
 if not sys.warnoptions:
@@ -51,37 +72,33 @@ def svg2gcode(args) -> int:
                'color_coded': args.color_coded,})
 
     compiler = init_compiler(args)
+    compiler.compile_to_file(args.gcode, args.svg, parse_file(args.svg, scale_factor=args.scale, rotate_deg=args.rotate), passes=args.passes, write=not(args.selfcenter or args.origin))
 
-    # emit gcode for svg
-    if args.selfcenter:
-        print("pass 1")
-    compiler.compile_to_file(args.gcode, args.svg, parse_file(args.svg, delta_origin=args.origin, scale_factor=args.scale, rotate_deg=args.rotate), passes=args.passes)
+    if args.selfcenter or args.origin:
+        if args.selfcenter:
+            center = compiler.boundingbox.center()
+            center = (round(center[0], compiler.precision), round(center[1], compiler.precision))
+            center = (-center[0], -center[1])
 
-    if args.selfcenter:
-        # remove output files(s)
-        filename = args.gcode
+            # init compiler again
+            compiler = init_compiler(args)
 
-        if os.path.isfile(filename):
-            os.remove(filename)
-        image_filename = filename.rsplit('.',1)[0] + "_images." + filename.rsplit('.',1)[1]
-        if os.path.isfile(image_filename):
-            os.remove(image_filename)
+            # now run with origin set to center
+            # emit gcode for svg
+            compiler.compile_to_file(args.gcode, args.svg, parse_file(args.svg, delta_origin=center, scale_factor=args.scale, rotate_deg=args.rotate), passes=args.passes)
+        else:
+            # get origin 0,0
+            bbox = compiler.boundingbox.get()
+            bbox = (round(bbox.lowerleft.x, compiler.precision), round(bbox.lowerleft.y, compiler.precision))
+            # set new origin for bbox relative to 0,0
+            origin = (-bbox[0] + args.origin[0], -bbox[1] + args.origin[1])
 
-        center = compiler.boundingbox.center()
-        center = (round(center[0], compiler.precision), round(center[1], compiler.precision))
-        print(f"center: {center}")
-        center = (-center[0], -center[1])
+            # init compiler again
+            compiler = init_compiler(args)
 
-        # init compiler again
-        compiler = init_compiler(args)
-
-        # now run with origin set to center
-        # emit gcode for svg
-        print("pass 2")
-        compiler.compile_to_file(args.gcode, args.svg, parse_file(args.svg, delta_origin=center, scale_factor=args.scale, rotate_deg=args.rotate), passes=args.passes)
-        center = compiler.boundingbox.center()
-        center = (round(center[0], compiler.precision), round(center[1], compiler.precision))
-        print(f"new center: {center}")
+            # Now compile and set lower left of engrave and cut area bounding box to args origin
+            # emit gcode for svg
+            compiler.compile_to_file(args.gcode, args.svg, parse_file(args.svg, delta_origin=origin, scale_factor=args.scale, rotate_deg=args.rotate), passes=args.passes)
 
     return 0
 
@@ -116,11 +133,11 @@ def main() -> int:
             cfg.update({k + '_default': v for k,v in tomllib.load(f).items()})
 
     # Define command line argument interface
-    parser = argparse.ArgumentParser(description='Convert svg to gcode for GRBL v1.1 compatible diode laser engravers.')
+    parser = argparse.ArgumentParser(description='Convert svg to gcode for GRBL v1.1 compatible diode laser engravers.',
+                                     formatter_class=argparse.RawTextHelpFormatter )
     parser.add_argument('svg', type=str, help='svg file to be converted to gcode')
     parser.add_argument('gcode', type=str, help='gcode output file')
     parser.add_argument('--showimage', action='store_true', default=False, help='show b&w converted image' )
-    parser.add_argument('--selfcenter', action='store_true', default=False, help='self center the gcode (--origin cannot be used at the same time)' )
     parser.add_argument('--pixelsize', default=cfg["pixelsize_default"], metavar="<default:" + str(cfg["pixelsize_default"])+">",
         type=float, help="pixel size in mm (XY-axis): each image pixel is drawn this size")
     parser.add_argument('--imagespeed', default=cfg["imagespeed_default"], metavar="<default:" + str(cfg["imagespeed_default"])+">",
@@ -145,8 +162,9 @@ def main() -> int:
         type=int, help="overscan image lines to avoid incorrect power levels for pixels at left and right borders, number in pixels, default off")
     parser.add_argument('--showoverscan', action='store_true', default=False, help='show overscan pixels (note that this is visible and part of the gcode emitted!)' )
     parser.add_argument('--constantburn', action=argparse.BooleanOptionalAction, default=cfg["constantburn_default"], help='default constant burn mode (M3)')
-    parser.add_argument('--origin', default=None, nargs=2, metavar=('delta-x', 'delta-y'),
-        type=float, help="translate origin by vector (delta-x,delta-y) in mm (default not set, option --selfcenter cannot be used at the same time)")
+    parser.add_argument('--selfcenter', action='store_true', default=False, help='self center the gcode; (0,0) is at the center of the engrave and cut area, option --origin cannot be used at the same time' )
+    parser.add_argument('--origin', default=None, nargs=2, metavar=('origin-x', 'origin-y'),
+        type=float, help="set lower left of engrave and cut area to (origin-x,origin-y), option --selfcenter cannot be used at the same time")
     parser.add_argument('--scale', default=None, nargs=2, metavar=('factor-x', 'factor-y'),
         type=float, help="scale svg with (factor-x,factor-y) (default not set)")
     parser.add_argument('--rotate', default=cfg["rotate_default"], metavar="<default:" +str(cfg["rotate_default"])+ ">",
@@ -161,8 +179,8 @@ def main() -> int:
     parser.add_argument('--ymaxtravel', default=cfg["ymaxtravel_default"], metavar="<default:" +str(cfg["ymaxtravel_default"])+ ">",
         type=int, help="machine y-axis lengh in mm")
     parser.add_argument('--color_coded', action = 'store', default=cfg["colorcoded_default"], metavar="<default:\"" + str(cfg["colorcoded_default"])+ "\">",
-         type = str, help = 'set action for path with specific stroke color "[[color|allothercolors] = [cut|engrave|ignore] *]*"'
-                            ', example: --color_coded "black = ignore purple = cut blue = engrave allothercolors = ignore"' )
+         type = str, help = ("set action for path with specific stroke color \"[[color|allothercolors] = [cut|engrave|ignore] *]*\"\n"
+                            ', example: --color_coded "black = ignore purple = cut blue = engrave allothercolors = ignore"'))
     parser.add_argument('--fan', action = 'store', default=cfg["fan_default"], metavar="<default:\"" + str(cfg["fan_default"])+ "\">",
          type = str, help = 'set fan [on|on_engrave|on_cut]')
     parser.add_argument('-V', '--version', action='version', version='%(prog)s ' + __version__, help="show version number and exit")
@@ -172,7 +190,7 @@ def main() -> int:
     try:
         if args.color_coded != "":
             if args.pathcut:
-                print("options --color_coded and --pathcut cannot be used at the same time, program abort")
+                logger.error("options --color_coded and --pathcut cannot be used at the same time, program abort")
                 return 1
 
             # check color_coded argument validity (1)
@@ -181,8 +199,8 @@ def main() -> int:
             cc = re.sub(",", '', args.color_coded)
             fm = re.fullmatch("( *[^ ]* *= *(cut|engrave|ignore))+", cc)
             if not fm:
-                print(f"syntax error in argument: '--color_coded {args.color_coded}', argument should be similar to: "
-                      f"'--color_coded \"black = ignore purple = cut blue = engrave\"'")
+                logger.error(f"syntax error in argument: '--color_coded {args.color_coded}', argument should be similar to: "
+                             f"'--color_coded \"black = ignore purple = cut blue = engrave\"'")
                 return 1
 
             cc = fm.group(0)
@@ -193,31 +211,31 @@ def main() -> int:
             # a path color should be in one set only
             for i in pathignore:
                 if i in pathcut or i in pathengrave:
-                    print(f"error in argument: '--color_coded \"{args.color_coded}\"' has a path color '{i}' set in multiple categories (cut|engrave|ignore).")
+                    logger.error(f"error in argument: '--color_coded \"{args.color_coded}\"' has a path color '{i}' set in multiple categories (cut|engrave|ignore).")
                     return 1
             for i in pathcut:
                 if i in pathengrave:
-                    print(f"error in argument: '--color_coded \"{args.color_coded}\"' has a path color '{i}' set in multiple categories (cut|engrave|ignore).")
+                    logger.error(f"error in argument: '--color_coded \"{args.color_coded}\"' has a path color '{i}' set in multiple categories (cut|engrave|ignore).")
                     return 1
 
             # check validity of color argument, either "allothercolors" or a valid color value e.g. one of '#hex', 'rgb(', 'rgba(', 'hsl(' and 'hsla(' color schemes.
             for i in pathignore + pathcut + pathengrave:
                 if not (i == "allothercolors" or css_color.parse_css_color(i, fallback = False, warning = False)):
-                    print(f"error in argument: '--color_coded \"{args.color_coded}\"':")
-                    print(f"- invalid color '{i}', color must be of scheme '#hex', 'rgb', 'rgba', 'hsl', 'hsla' or set to 'allothercolors'.")
+                    logger.error(f"error in argument: '--color_coded \"{args.color_coded}\"':")
+                    logger.error(f"- invalid color '{i}', color must be of scheme '#hex', 'rgb', 'rgba', 'hsl', 'hsla' or set to 'allothercolors'.")
                     return 1
 
         if args.origin is not None and args.selfcenter:
-            print("options --selfcenter and --origin cannot be used at the same time, program abort")
+            logger.error("options --selfcenter and --origin cannot be used at the same time, program abort")
             return 1
 
         return svg2gcode(args)
 
     except KeyboardInterrupt:
-        print("svg2gcode aborted!")
+        logger.error("svg2gcode aborted!")
         return 1
     except Exception as error:
-        print(error)
+        logger.error(error)
         return 1
 
 if __name__ == '__main__':
